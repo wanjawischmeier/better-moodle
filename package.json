@@ -14,6 +14,7 @@
         "dev": "vite",
         "prebuild": "yarn i18n:once && tsc",
         "build": "yarn prebuild && vite build -- --config=${0}",
+        "build:chrome-ext": "vite build -- --config=${0} --chrome-extension",
         "release-build": "yarn prebuild && vite build -- --config=${0} --release",
         "build:uzl": "yarn build uzl",
         "build:cau": "yarn build cau",

@@ -31,6 +31,7 @@ const configFile =
 if (configFile instanceof Error) throw configFile;
 
 const isReleaseBuild = process.argv.some(arg => arg === '--release');
+const isChromeExtension = process.argv.some(arg => arg === '--chrome-extension');
 
 const config = JSON.parse(
     await fs.readFile(`./configs/${configFile}.json`, 'utf-8')
@@ -764,7 +765,7 @@ export default defineConfig({
                 'updateURL': `${releaseDownloadUrl}/${metaFileName}`,
                 'downloadURL': `${releaseDownloadUrl}/${fileName}`,
                 'match': `${config.moodleUrl}/*`,
-                'run-at': 'document-body',
+                'run-at': 'document-start',
                 'connect': connects,
                 'require': requires,
             },
@@ -872,6 +873,370 @@ ${copyright}
                         .then(md => fs.writeFile(polyfillsListFile, md)),
                 ]);
             },
+        },
+        // ...existing code...
+
+        {
+            name: 'chrome-extension-builder',
+            apply: 'build',
+            /**
+             * Generates Chrome extension files from the userscript
+             * @param options - the output options
+             */
+            async writeBundle(options) {
+                if (!isChromeExtension) return;
+
+                const base = options.dir;
+                if (!base) return;
+
+                const userscriptPath = path.join(base, fileName);
+                const userscriptContent = await fs.readFile(userscriptPath, 'utf8');
+
+                // Create extension directory
+                const extDir = path.join(base, `chrome-ext-${configFile}`);
+                await fs.mkdir(extDir, { recursive: true });
+
+                // Map run-at values from userscript to Chrome extension
+                const runAtMap: Record<string, 'document_start' | 'document_end' | 'document_idle'> = {
+                    'document-start': 'document_start',
+                    'document-end': 'document_end',
+                    'document-idle': 'document_idle',
+                };
+
+                // Prepare content scripts array
+                const contentScripts = [];
+                
+                // Add GM API shim first (before everything else)
+                contentScripts.push('gm-shim.js');
+                
+                // Check if polyfills file exists and add it first
+                const polyfillsFileName = `better-moodle-${configFile}-polyfills.js`;
+                const polyfillsPath = path.join(base, polyfillsFileName);
+                let hasPolyfills = false;
+                try {
+                    await fs.access(polyfillsPath);
+                    hasPolyfills = true;
+                    contentScripts.push('polyfills.js');
+                } catch {
+                    // Polyfills file doesn't exist
+                }
+
+                // Add requires if any (excluding polyfills which we handle separately)
+                if (requires.length > 0) {
+                    contentScripts.push('requires.js');
+                }
+
+                // Add main content script
+                contentScripts.push('content.js');
+
+                // Get description - handle both string and object formats
+                const description = typeof config.description === 'string' 
+                    ? config.description 
+                    : (config.description)[''] ?? Object.values(config.description)[0] ?? '';
+
+                // Generate manifest.json
+                const manifest = {
+                    manifest_version: 3,
+                    name: `🎓️ ${config.uniName}: better-moodle`,
+                    version,
+                    description,
+                    permissions: ['storage'],
+                    host_permissions: [
+                        `${config.moodleUrl}/*`,
+                        ...connects.map(domain => `https://${domain}/*`)
+                    ],
+                    content_scripts: [{
+                        matches: [`${config.moodleUrl}/*`],
+                        js: ['injector.js'],
+                        run_at: runAtMap['document-start'] || 'document_start',
+                        all_frames: false
+                    }],
+                    web_accessible_resources: [{
+                        resources: contentScripts,
+                        matches: [`${config.moodleUrl}/*`]
+                    }],
+                    icons: {
+                        128: 'icon.png'
+                    }
+                };
+
+                await fs.writeFile(
+                    path.join(extDir, 'manifest.json'),
+                    JSON.stringify(manifest, null, 2)
+                );
+
+                // Create injector script that injects our scripts into the main page context
+                const injector = `
+// Injector: Injects scripts into the main page context and bridges storage
+(function() {
+    // Inject all scripts into main page context
+    const scripts = ${JSON.stringify(contentScripts)};
+    
+    scripts.forEach(scriptName => {
+        const script = document.createElement('script');
+        script.src = chrome.runtime.getURL(scriptName);
+        script.onload = () => script.remove();
+        (document.head || document.documentElement).appendChild(script);
+    });
+    
+    // Bridge storage between page and extension
+    window.addEventListener('message', async (event) => {
+        if (event.source !== window) return;
+        
+        const { type, key, value } = event.data;
+        
+        if (type === 'GM_STORAGE_REQUEST_INIT') {
+            const items = await chrome.storage.local.get(null);
+            window.postMessage({ type: 'GM_STORAGE_INIT', data: items }, '*');
+        } else if (type === 'GM_STORAGE_SET') {
+            await chrome.storage.local.set({ [key]: value });
+        } else if (type === 'GM_STORAGE_DELETE') {
+            await chrome.storage.local.remove(key);
+        }
+    });
+    
+    // Forward storage changes to page
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName === 'local') {
+            window.postMessage({ type: 'GM_STORAGE_CHANGED', data: changes }, '*');
+        }
+    });
+})();
+`.trim();
+                await fs.writeFile(path.join(extDir, 'injector.js'), injector);
+
+                // Copy polyfills file if it exists
+                if (hasPolyfills) {
+                    await fs.copyFile(
+                        polyfillsPath,
+                        path.join(extDir, 'polyfills.js')
+                    );
+                }
+
+                // Create GM API shim for Chrome extension
+                const gmShim = `
+// GM API Shim for Chrome Extension
+// This runs in the main page context (injected) and communicates with extension for storage
+
+// Storage cache
+window.__gmStorageCache = {};
+window.__gmStorageReady = false;
+
+// Message handler for storage responses
+window.addEventListener('message', (event) => {
+    if (event.source !== window || !event.data.type?.startsWith('GM_STORAGE_')) return;
+    
+    const { type, data } = event.data;
+    
+    if (type === 'GM_STORAGE_INIT') {
+        window.__gmStorageCache = data || {};
+        window.__gmStorageReady = true;
+        console.log('[GM Shim] Storage initialized with', Object.keys(data || {}).length, 'keys');
+        window.dispatchEvent(new Event('__gmStorageReady'));
+    } else if (type === 'GM_STORAGE_CHANGED') {
+        Object.entries(data).forEach(([key, change]) => {
+            if (change.newValue !== undefined) {
+                window.__gmStorageCache[key] = change.newValue;
+            } else {
+                delete window.__gmStorageCache[key];
+            }
+        });
+    }
+});
+
+// Request initial storage data
+window.postMessage({ type: 'GM_STORAGE_REQUEST_INIT' }, '*');
+
+const GM = {
+    getValue: async (key, defaultValue) => {
+        if (!window.__gmStorageReady) {
+            await new Promise(resolve => {
+                window.addEventListener('__gmStorageReady', resolve, { once: true });
+            });
+        }
+        return window.__gmStorageCache[key] ?? defaultValue;
+    },
+    setValue: async (key, value) => {
+        window.__gmStorageCache[key] = value;
+        window.postMessage({ type: 'GM_STORAGE_SET', key, value }, '*');
+    },
+    deleteValue: async (key) => {
+        delete window.__gmStorageCache[key];
+        window.postMessage({ type: 'GM_STORAGE_DELETE', key }, '*');
+    },
+    listValues: async () => {
+        if (!window.__gmStorageReady) {
+            await new Promise(resolve => {
+                window.addEventListener('__gmStorageReady', resolve, { once: true });
+            });
+        }
+        return Object.keys(window.__gmStorageCache);
+    },
+    xmlHttpRequest: (details) => {
+        // Use fetch instead of XHR to avoid CORS in main context
+        return fetch(details.url, {
+            method: details.method || 'GET',
+            headers: details.headers,
+            body: details.data,
+            credentials: 'omit'
+        }).then(response => {
+            return response.text().then(text => {
+                const result = {
+                    status: response.status,
+                    statusText: response.statusText,
+                    responseText: text,
+                    responseHeaders: Array.from(response.headers.entries())
+                        .map(([k, v]) => \`\${k}: \${v}\`).join('\\n'),
+                };
+                if (details.onload) details.onload(result);
+                return result;
+            });
+        }).catch(error => {
+            const result = { status: 0, statusText: error.message };
+            if (details.onerror) details.onerror(result);
+            throw result;
+        });
+    },
+    addStyle: (css) => {
+        const style = document.createElement('style');
+        style.textContent = css;
+        (document.head || document.documentElement).appendChild(style);
+    },
+    notification: (details) => {
+        // Notifications require background script in MV3
+        console.log('[GM Shim] Notification:', details.title, details.text);
+    },
+    info: {
+        script: {
+            name: "${config.uniName}: better-moodle",
+            namespace: "${config.namespace}",
+            version: "${version}",
+        },
+        scriptHandler: "Chrome Extension",
+        version: "${version}",
+    },
+};
+
+// Synchronous wrappers
+const GM_getValue = (key, defaultValue) => {
+    if (!window.__gmStorageReady) {
+        console.warn('[GM Shim] GM_getValue called before storage ready, returning default for:', key);
+        return defaultValue;
+    }
+    return window.__gmStorageCache[key] ?? defaultValue;
+};
+
+const GM_setValue = (key, value) => {
+    window.__gmStorageCache[key] = value;
+    window.postMessage({ type: 'GM_STORAGE_SET', key, value }, '*');
+};
+
+const GM_deleteValue = (key) => {
+    delete window.__gmStorageCache[key];
+    window.postMessage({ type: 'GM_STORAGE_DELETE', key }, '*');
+};
+
+const GM_listValues = () => {
+    if (!window.__gmStorageReady) {
+        console.warn('[GM Shim] GM_listValues called before storage ready, returning []');
+        return [];
+    }
+    return Object.keys(window.__gmStorageCache);
+};
+
+const GM_xmlHttpRequest = (details) => GM.xmlHttpRequest(details);
+const GM_addStyle = (css) => GM.addStyle(css);
+const GM_notification = (details) => GM.notification(details);
+const GM_info = GM.info;
+
+const GM_addValueChangeListener = (key, callback) => {
+    window.addEventListener('message', (event) => {
+        if (event.source !== window || event.data.type !== 'GM_STORAGE_CHANGED') return;
+        const change = event.data.data[key];
+        if (change) {
+            callback(key, change.oldValue, change.newValue, false);
+        }
+    });
+};
+
+const unsafeWindow = window;
+
+console.log('[GM Shim] Loaded, waiting for storage...');
+`.trim();
+
+                await fs.writeFile(path.join(extDir, 'gm-shim.js'), gmShim);
+
+                // Handle @require dependencies (excluding local polyfills)
+                if (requires.length > 0) {
+                    const requiresContent = await Promise.all(
+                        requires.map(async (requireUrl) => {
+                            const url = requireUrl.split('#')[0]; // Remove hash
+                            
+                            // Skip local polyfills file - we copied it separately
+                            if (url.includes(polyfillsFileName)) {
+                                return '';
+                            }
+                            
+                            try {
+                                const response = await fetch(url);
+                                if (response.ok) {
+                                    return `// ${url}\n${await response.text()}\n`;
+                                }
+                            } catch (error) {
+                                console.warn(`Failed to fetch ${url}:`, error);
+                            }
+                            return `// Failed to fetch: ${url}\n`;
+                        })
+                    );
+                    const filteredContent = requiresContent.filter(c => c !== '').join('\n');
+                    if (filteredContent) {
+                        await fs.writeFile(
+                            path.join(extDir, 'requires.js'),
+                            filteredContent
+                        );
+                    }
+                }
+
+                // Copy userscript as content.js (remove userscript metadata and wrap in async init)
+                const contentJsRaw = userscriptContent.replace(/\/\/ ==UserScript==[\s\S]*?\/\/ ==\/UserScript==\s*/m, '');
+                const contentJsWrapped = `
+// Wait for GM storage to be ready before executing main script
+(async function() {
+    // Wait for storage to initialize
+    if (!window.__gmStorageReady) {
+        console.log('[Content] Waiting for GM storage to be ready...');
+        await new Promise(resolve => {
+            if (window.__gmStorageReady) {
+                resolve();
+            } else {
+                window.addEventListener('__gmStorageReady', resolve, { once: true });
+            }
+        });
+        console.log('[Content] GM storage ready, executing main script');
+    }
+    
+    // Execute main script
+    ${contentJsRaw}
+})();
+`.trim();
+                await fs.writeFile(path.join(extDir, 'content.js'), contentJsWrapped);
+
+                // Download icon
+                const iconUrl = `https://icons.better-moodle.dev/${configFile}.png`;
+                try {
+                    const iconResponse = await fetch(iconUrl);
+                    if (iconResponse.ok) {
+                        await fs.writeFile(
+                            path.join(extDir, 'icon.png'),
+                            Buffer.from(await iconResponse.arrayBuffer())
+                        );
+                    }
+                } catch (error) {
+                    console.warn(`Failed to fetch icon:`, error);
+                }
+
+                console.log(`Chrome extension built at: ${extDir}`);
+            }
         },
     ],
 });
