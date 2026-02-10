@@ -153,20 +153,31 @@ SupportBtn.addEventListener('click', e => {
 
 const latestVersionEl = (<code></code>) as HTMLElement;
 
+const isExtension = GM_info.scriptHandler === 'Extension';
+
 const SupportWrapper = (
     <div
         id={settingsStyle.supportWrapper}
         className="position-absolute z-index-1 d-flex flex-row small card border-light mb-3"
     >
         {SupportBtn}
-        <div className="d-flex flex-row flex-lg-column align-items-end">
-            <span>
-                {LL.settings.modal.installedVersion()}:{' '}
-                <code>{GM_info.script.version}</code>
-            </span>
-            <span>
-                {LL.settings.modal.latestVersion()}: {latestVersionEl}
-            </span>
+        <div className="d-flex flex-row flex-lg-column justify-content-center align-items-end">
+            {isExtension ? (
+                <span>
+                    {LL.settings.modal.version()}:{' '}
+                    <code>{GM_info.script.version}</code>
+                </span>
+            ) : (
+                <>
+                    <span>
+                        {LL.settings.modal.installedVersion()}:{' '}
+                        <code>{GM_info.script.version}</code>
+                    </span>
+                    <span>
+                        {LL.settings.modal.latestVersion()}: {latestVersionEl}
+                    </span>
+                </>
+            )}
         </div>
     </div>
 );
@@ -216,8 +227,15 @@ let updateCheckRetryTimeout: ReturnType<(typeof window)['setTimeout']> | null;
  * If enabled, a red dot is appended to the settings trigger button.
  * @returns void
  */
-const checkForUpdates = () =>
-    getLoadingSpinner()
+const checkForUpdates = () => {
+    // Skip update check if running as Chrome extension
+    // Extensions are updated automatically by the browser
+    if (GM_info.scriptHandler === 'Extension') {
+        latestVersionEl.replaceChildren('(managed by browser)');
+        return Promise.resolve();
+    }
+    
+    return getLoadingSpinner()
         .then(spinner => latestVersionEl.replaceChildren(spinner))
         .then(() =>
             request(
@@ -257,6 +275,7 @@ const checkForUpdates = () =>
                 ONE_MINUTE
             );
         });
+};
 
 void checkForUpdates();
 updateNotificationSetting.onChange(() => void checkForUpdates());

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "🎓️ UzL: better-moodle",
-  "version": "2.6.5",
+  "version": "2.6.6",
   "description": "Improves UzL-Moodle by cool features and design improvements.",
   "author": "Jan (jxn_30), Yorik (YorikHansen)",
   "homepage_url": "https://github.com/jxn-30/better-moodle",
@@ -12,10 +12,11 @@
   "permissions": [
     "storage",
     "notifications",
-    "scripting"
+    "scripting",
+    "webNavigation"
   ],
   "background": {
-    "service_worker": "background.js"
+    "scripts": ["background.js"]
   },
   "host_permissions": [
     "https://moodle.uni-luebeck.de/*",
@@ -36,7 +37,9 @@
   ],
   "content_scripts": [
     {
-      "matches": ["https://moodle.uni-luebeck.de/*"],
+      "matches": [
+        "https://moodle.uni-luebeck.de/*"
+      ],
       "js": [
         "content-script-bridge.js"
       ],
@@ -47,11 +50,11 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "scripts/*",
-        "polyfills/chrome.js",
-        "darkreader-loader.js"
+        "scripts/*"
       ],
-      "matches": ["https://moodle.uni-luebeck.de/*"]
+      "matches": [
+        "https://moodle.uni-luebeck.de/*"
+      ]
     }
   ]
 }

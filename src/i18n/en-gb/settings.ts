@@ -5,6 +5,7 @@ export default {
     modal: {
         title: 'Preferences',
         moodleSettings: 'Go to Moodle-Preferences',
+        version: 'Version',
         installedVersion: 'installed version',
         latestVersion: 'latest Version',
         import: 'import preferences',

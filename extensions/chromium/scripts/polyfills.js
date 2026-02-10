@@ -310,7 +310,7 @@
   window.GM_info = {
     script: {
       name: '🎓️ UzL: better-moodle',
-      version: '2.6.5',
+      version: '2.6.6',
       description: 'Improves UzL-Moodle by cool features and design improvements.',
       author: 'Jan (jxn_30), Yorik (YorikHansen)',
       homepage: 'https://github.com/jxn-30/better-moodle',
@@ -321,9 +321,9 @@
       matches: ['https://moodle.uni-luebeck.de/*'],
       runAt: 'document-start'
     },
-    scriptMetaStr: '// @name 🎓️ UzL: better-moodle\n// @version 2.6.5\n// @description Improves UzL-Moodle by cool features and design improvements.',
-    scriptHandler: 'Chrome Extension',
-    version: '2.6.5'
+    scriptMetaStr: '// @name 🎓️ UzL: better-moodle\n// @version 2.6.6\n// @description Improves UzL-Moodle by cool features and design improvements.',
+    scriptHandler: 'Extension',
+    version: '2.6.6'
   };
 
   // unsafeWindow

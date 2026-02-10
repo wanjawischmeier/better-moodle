@@ -6,6 +6,7 @@ export default {
     modal: {
         title: 'Einstellungen',
         moodleSettings: 'Zu den Moodle Einstellungen',
+        version: 'Version',
         installedVersion: 'installierte Version',
         latestVersion: 'aktuellste Version',
         import: 'Einstellungen importieren',

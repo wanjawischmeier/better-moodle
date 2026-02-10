@@ -37,7 +37,7 @@
 
   // 1. Load polyfills (GM_* APIs)
   console.log('[Better-Moodle Extension] Loading polyfills...');
-  loadScriptSync(`chrome-extension://${extensionId}/polyfills/chrome.js`);
+  loadScriptSync(`chrome-extension://${extensionId}/scripts/polyfills.js`);
   
   // Wait for storage cache to initialize
   if (window.GM_ready) {
