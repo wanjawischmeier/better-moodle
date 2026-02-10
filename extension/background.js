@@ -3,9 +3,40 @@
  * 
  * This script runs in the background and has full access to cross-origin requests
  * without CORS restrictions. It handles XHR requests from the content script.
+ * It also registers scripts to run in MAIN world for fast injection.
  */
 
 console.log('[Better-Moodle Extension] Background service worker started');
+
+/**
+ * Register content scripts to run in MAIN world (page context)
+ * This allows them to run as fast as Tampermonkey userscripts
+ */
+chrome.runtime.onInstalled.addListener(async () => {
+  console.log('[Better-Moodle Extension] Registering MAIN world scripts');
+  
+  try {
+    // Unregister any existing scripts first
+    await chrome.scripting.unregisterContentScripts();
+    
+    // Register main script to run in MAIN world at document_start
+    // This single script loads all dependencies in the correct order
+    await chrome.scripting.registerContentScripts([
+      {
+        id: 'better-moodle-main',
+        matches: ['https://moodle.uni-luebeck.de/*'],
+        js: ['main.js'],
+        runAt: 'document_start',
+        world: 'MAIN',
+        allFrames: false
+      }
+    ]);
+    
+    console.log('[Better-Moodle Extension] MAIN world scripts registered successfully');
+  } catch (error) {
+    console.error('[Better-Moodle Extension] Failed to register scripts:', error);
+  }
+});
 
 /**
  * Handle XHR requests from content scripts

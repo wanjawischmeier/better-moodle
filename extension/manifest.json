@@ -11,7 +11,8 @@
   },
   "permissions": [
     "storage",
-    "notifications"
+    "notifications",
+    "scripting"
   ],
   "background": {
     "service_worker": "background.js"
@@ -37,8 +38,7 @@
     {
       "matches": ["https://moodle.uni-luebeck.de/*"],
       "js": [
-        "content-script-bridge.js",
-        "content-script-loader.js"
+        "content-script-bridge.js"
       ],
       "run_at": "document_start",
       "all_frames": false

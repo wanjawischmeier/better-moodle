@@ -97,19 +97,36 @@
     if (cacheInitialized) return;
     if (initPromise) return initPromise;
     
-    initPromise = sendMessage('STORAGE_GET_ALL', {}).then(allData => {
-      Object.assign(storageCache, allData);
-      cacheInitialized = true;
-      console.log('[Better-Moodle Extension] Storage cache initialized');
-    }).catch(error => {
-      console.error('[Better-Moodle Extension] Failed to initialize cache:', error);
-    });
+    initPromise = (async () => {
+      // Wait for content script bridge to be ready
+      let retries = 0;
+      while (retries < 50) { // 50 * 100ms = 5 seconds max
+        try {
+          const allData = await sendMessage('STORAGE_GET_ALL', {});
+          Object.assign(storageCache, allData);
+          cacheInitialized = true;
+          console.log('[Better-Moodle Extension] Storage cache initialized');
+          return;
+        } catch (error) {
+          retries++;
+          if (retries >= 50) {
+            console.error('[Better-Moodle Extension] Failed to initialize cache after retries:', error);
+            throw error;
+          }
+          // Wait 100ms before retry
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+    })();
     
     return initPromise;
   }
   
   // Start initialization immediately
   initializeCache();
+  
+  // Expose a ready promise for main.js to wait on
+  window.GM_ready = initPromise;
 
   // GM_getValue - synchronous API using cache
   window.GM_getValue = function(key, defaultValue) {
