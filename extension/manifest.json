@@ -1,0 +1,57 @@
+{
+  "manifest_version": 3,
+  "name": "🎓️ UzL: better-moodle",
+  "version": "2.6.5",
+  "description": "Improves UzL-Moodle by cool features and design improvements.",
+  "author": "Jan (jxn_30), Yorik (YorikHansen)",
+  "homepage_url": "https://github.com/jxn-30/better-moodle",
+  "icons": {
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  },
+  "permissions": [
+    "storage",
+    "notifications"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "https://moodle.uni-luebeck.de/*",
+    "https://better-moodle.dev/*",
+    "https://*.better-moodle.dev/*",
+    "https://studentenwerk.sh/*",
+    "https://*.studentenwerk.sh/*",
+    "https://nina.api.proxy.bund.dev/*",
+    "https://*.nina.api.proxy.bund.dev/*",
+    "https://api.open-meteo.com/*",
+    "https://*.api.open-meteo.com/*",
+    "https://api.openweathermap.org/*",
+    "https://*.api.openweathermap.org/*",
+    "https://weather.visualcrossing.com/*",
+    "https://*.weather.visualcrossing.com/*",
+    "https://wttr.in/*",
+    "https://*.wttr.in/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://moodle.uni-luebeck.de/*"],
+      "js": [
+        "content-script-bridge.js",
+        "content-script-loader.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "scripts/*",
+        "polyfills/chrome.js",
+        "darkreader-loader.js"
+      ],
+      "matches": ["https://moodle.uni-luebeck.de/*"]
+    }
+  ]
+}

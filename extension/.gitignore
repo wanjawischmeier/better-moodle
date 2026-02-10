@@ -1,0 +1,13 @@
+# Copied userscript files (regenerated from dist/)
+scripts/better-moodle-uzl.user.js
+scripts/better-moodle-uzl-polyfills.js
+scripts/darkreader.js
+
+# Icon files (may be generated)
+icon-48.png
+icon-128.png
+
+# Extension packaging
+*.zip
+*.crx
+*.pem
