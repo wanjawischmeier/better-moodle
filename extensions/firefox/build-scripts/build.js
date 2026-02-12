@@ -5,9 +5,7 @@
 
 import { buildExtension } from '../../shared-build.js';
 
-const config = process.argv[2];
-
-buildExtension('firefox', config).catch(err => {
+buildExtension('firefox').catch(err => {
     console.error('Build failed:', err);
     process.exit(1);
 });

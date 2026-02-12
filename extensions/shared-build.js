@@ -36,16 +36,10 @@ const EXTERNAL_SCRIPTS = [
 ];
 
 /**
- * Build an extension for a specific platform and config
+ * Build an extension for a specific platform
  * @param {string} platform - 'chromium' or 'firefox'
- * @param {string} config - 'uzl' or 'cau'
  */
-export async function buildExtension(platform, config) {
-    if (config === undefined) {
-        console.error('Undefined extension build config');
-        return;
-    }
-
+export async function buildExtension(platform) {
     const rootDir = join(__dirname, '..');
     const extensionDir = join(__dirname, platform);
     const distDir = join(rootDir, 'dist');
@@ -53,7 +47,7 @@ export async function buildExtension(platform, config) {
     const distPlatformDir = join(distExtensionsDir, platform);
 
     console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    console.log(`Building ${platform} extension (${config} config)...`);
+    console.log(`Building ${platform} extension...`);
     console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
 
     // 1. Update manifest and polyfills
@@ -97,24 +91,49 @@ export async function buildExtension(platform, config) {
     copyRecursive(extensionDir, distPlatformDir);
     console.log(`Copied extension files to ${distPlatformDir}`);
 
-    // 3. Copy the built userscript to dist/extensions/platform/scripts
-    console.log('Copying built userscript...');
-    const userscriptName = `better-moodle-${config}.user.js`;
-    const userscriptSrc = join(distDir, userscriptName);
-    const userscriptDest = join(distPlatformDir, 'scripts', userscriptName);
+    // 3. Inject URL mappings and supported URLs into copied files
+    if (platform === 'chromium') {
+        console.log('Injecting URL mappings and supported URLs...');
+        const { injectUrlMapping, injectBackgroundUrls } = await import(
+            `./${platform}/build-scripts/inject-universities.js`
+        );
 
-    if (!existsSync(userscriptSrc)) {
-        console.error(`Error: Built userscript not found at ${userscriptSrc}`);
+        injectUrlMapping(
+            join(distPlatformDir, 'main.js'),
+            join(distPlatformDir, 'main.js')
+        );
+
+        injectBackgroundUrls(
+            join(distPlatformDir, 'background.js'),
+            join(distPlatformDir, 'background.js')
+        );
+    }
+
+    // 4. Copy all built userscripts to dist/extensions/platform/scripts
+    console.log('Copying built userscripts...');
+    const scriptsDir = join(distPlatformDir, 'scripts');
+    mkdirSync(scriptsDir, { recursive: true });
+
+    // Find all userscript files in dist
+    const distFiles = readdirSync(distDir);
+    const userscriptFiles = distFiles.filter(
+        file => file.startsWith('better-moodle-') && file.endsWith('.user.js')
+    );
+
+    if (userscriptFiles.length === 0) {
+        console.error(`Error: No built userscripts found in ${distDir}`);
         process.exit(1);
     }
 
-    copyFileSync(userscriptSrc, userscriptDest);
-    console.log(`Copied ${userscriptName} to scripts folder`);
+    for (const userscriptFile of userscriptFiles) {
+        const userscriptSrc = join(distDir, userscriptFile);
+        const userscriptDest = join(scriptsDir, userscriptFile);
+        copyFileSync(userscriptSrc, userscriptDest);
+        console.log(`  Copied ${userscriptFile}`);
+    }
 
-    // 4. Fetch external scripts
+    // 5. Fetch external scripts
     console.log('Fetching external scripts...');
-    const scriptsDir = join(distPlatformDir, 'scripts');
-    mkdirSync(scriptsDir, { recursive: true });
 
     for (const script of EXTERNAL_SCRIPTS) {
         console.log(`  Fetching ${script.filename} from ${script.url}...`);
@@ -122,7 +141,7 @@ export async function buildExtension(platform, config) {
         console.log(`  Saved ${script.filename}`);
     }
 
-    // 5. Create zip file
+    // 6. Create zip file
     console.log('Creating extension zip...');
     const packageJson = JSON.parse(
         readFileSync(join(rootDir, 'package.json'), 'utf-8')

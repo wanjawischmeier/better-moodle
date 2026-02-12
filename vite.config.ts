@@ -457,6 +457,7 @@ export default defineConfig({
     build: {
         minify: 'esbuild',
         cssMinify: false,
+        emptyOutDir: false,
         target: Array.from(
             new Set(
                 resolveToEsbuildTarget(supportedBrowsers, {

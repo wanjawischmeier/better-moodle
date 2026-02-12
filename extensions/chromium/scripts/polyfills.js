@@ -326,10 +326,10 @@
     // GM_info
     window.GM_info = {
         script: {
-            name: '🎓️ UzL: better-moodle',
-            version: '2.6.6',
+            name: 'Better Moodle',
+            version: '2.6.7',
             description:
-                'Improves UzL-Moodle by cool features and design improvements.',
+                'Improves moodle instances by cool features and design improvements.',
             author: 'Jan (jxn_30), Yorik (YorikHansen)',
             homepage: 'https://github.com/jxn-30/better-moodle',
             downloadURL:
@@ -342,9 +342,9 @@
             runAt: 'document-start',
         },
         scriptMetaStr:
-            '// @name 🎓️ UzL: better-moodle\n// @version 2.6.6\n// @description Improves UzL-Moodle by cool features and design improvements.',
+            '// @name Better Moodle\n// @version 2.6.7\n// @description Improves moodle instances by cool features and design improvements.',
         scriptHandler: 'Extension',
-        version: '2.6.6',
+        version: '2.6.7',
     };
 
     // unsafeWindow

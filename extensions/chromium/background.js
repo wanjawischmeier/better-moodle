@@ -8,23 +8,25 @@
 
 console.log('[Better-Moodle Extension] Background service worker started');
 
+// This will be populated at build time with all supported Moodle URLs
+const SUPPORTED_URLS = 'SUPPORTED_URLS_PLACEHOLDER';
+
 /**
  * Register content scripts to run in MAIN world (page context)
  * This allows them to run as fast as Tampermonkey userscripts
  */
-chrome.runtime.onInstalled.addListener(async () => {
+async function registerScriptsForAllUniversities() {
     console.log('[Better-Moodle Extension] Registering MAIN world scripts');
 
     try {
         // Unregister any existing scripts first
         await chrome.scripting.unregisterContentScripts();
 
-        // Register main script to run in MAIN world at document_start
-        // This single script loads all dependencies in the correct order
+        // Register main script to run in MAIN world at document_start for all supported URLs
         await chrome.scripting.registerContentScripts([
             {
                 id: 'better-moodle-main',
-                matches: ['https://moodle.uni-luebeck.de/*'],
+                matches: SUPPORTED_URLS,
                 js: ['main.js'],
                 runAt: 'document_start',
                 world: 'MAIN',
@@ -33,7 +35,9 @@ chrome.runtime.onInstalled.addListener(async () => {
         ]);
 
         console.log(
-            '[Better-Moodle Extension] MAIN world scripts registered successfully'
+            '[Better-Moodle Extension] MAIN world scripts registered successfully for',
+            SUPPORTED_URLS.length,
+            'URLs'
         );
     } catch (error) {
         console.error(
@@ -41,7 +45,9 @@ chrome.runtime.onInstalled.addListener(async () => {
             error
         );
     }
-});
+}
+
+chrome.runtime.onInstalled.addListener(registerScriptsForAllUniversities);
 
 /**
  * Handle XHR requests from content scripts

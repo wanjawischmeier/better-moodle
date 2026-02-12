@@ -8,6 +8,9 @@
 
     console.log('[Better-Moodle Extension] Main script starting');
 
+    // URL to script mapping (injected at build time)
+    const URL_MAPPING = 'URL_MAPPING_PLACEHOLDER';
+
     // Get extension ID from Error stack trace
     const error = new Error();
     const stackMatch = error.stack.match(/chrome-extension:\/\/([^\/]+)\//);
@@ -21,6 +24,33 @@
 
     const extensionId = stackMatch[1];
     console.log('[Better-Moodle Extension] Extension ID:', extensionId);
+
+    // Determine which userscript to load based on current URL
+    const currentUrl = window.location.href;
+    let scriptToLoad = null;
+
+    for (const [moodleUrl, scriptName] of Object.entries(URL_MAPPING)) {
+        if (currentUrl.startsWith(moodleUrl)) {
+            scriptToLoad = scriptName;
+            console.log(
+                '[Better-Moodle Extension] Detected Moodle instance:',
+                moodleUrl
+            );
+            console.log(
+                '[Better-Moodle Extension] Loading script:',
+                scriptName
+            );
+            break;
+        }
+    }
+
+    if (!scriptToLoad) {
+        console.warn(
+            '[Better-Moodle Extension] No matching Moodle instance found for URL:',
+            currentUrl
+        );
+        return;
+    }
 
     // Helper to load script synchronously
     function loadScriptSync(url) {
@@ -65,11 +95,9 @@
         window.define = originalDefine;
     }
 
-    // 3. Load userscript
+    // 3. Load the selected university's userscript
     console.log('[Better-Moodle Extension] Loading userscript...');
-    loadScriptSync(
-        `chrome-extension://${extensionId}/scripts/better-moodle-uzl.user.js`
-    );
+    loadScriptSync(`chrome-extension://${extensionId}/scripts/${scriptToLoad}`);
 
     console.log('[Better-Moodle Extension] All scripts loaded successfully');
 })();
