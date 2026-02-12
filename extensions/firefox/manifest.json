@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "🎓️ UzL: better-moodle",
+    "name": "Better Moodle",
     "version": "2.6.6",
-    "description": "Improves UzL-Moodle by cool features and design improvements.",
+    "description": "Improves moodle instances by cool features and design improvements.",
     "author": "Jan (jxn_30), Yorik (YorikHansen)",
     "homepage_url": "https://github.com/jxn-30/better-moodle",
     "icons": { "48": "icon-48.png", "128": "icon-128.png" },
