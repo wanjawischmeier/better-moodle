@@ -227,7 +227,7 @@ let updateCheckRetryTimeout: ReturnType<(typeof window)['setTimeout']> | null;
  * @returns void
  */
 const checkForUpdates = () => {
-    // Skip update check if running as Chrome extension
+    // Skip update check if running as an extension
     // Extensions are updated automatically by the browser
     if (GM_info.scriptHandler === 'Extension') {
         latestVersionEl.replaceChildren('(managed by browser)');
