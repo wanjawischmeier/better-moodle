@@ -27,7 +27,9 @@ extension/
 ### 1. Prepare Required Files
 
 #### Copy Userscript Files
+
 Copy the following files from the `dist/` folder to `extension/scripts/`:
+
 ```bash
 # From the project root:
 copy dist\better-moodle-uzl-polyfills.js extension\scripts\
@@ -35,7 +37,9 @@ copy dist\better-moodle-uzl.user.js extension\scripts\
 ```
 
 #### Add Icons
+
 You need to provide two icon files:
+
 - `extension/icon-48.png` (48x48 pixels)
 - `extension/icon-128.png` (128x128 pixels)
 
@@ -63,7 +67,7 @@ When a new version of Better-Moodle is released:
 
 1. Build the new userscript version
 2. Copy the new file from `dist/` to `extension/scripts/`:
-   - `better-moodle-uzl.user.js`
+    - `better-moodle-uzl.user.js`
 3. Update the `version` in `manifest.json` to match
 4. Go to `chrome://extensions/`
 5. Click the refresh icon on the Better-Moodle extension card
@@ -75,16 +79,16 @@ When a new version of Better-Moodle is released:
 The extension uses a sophisticated three-context architecture:
 
 1. **MAIN World (Page Context)**: Scripts run directly in the page with access to Moodle's globals (RequireJS, M, etc.)
-   - `main.js`: Orchestrates loading order
-   - `polyfills/chrome.js`: Provides GM_* APIs via message passing
-   - `darkreader-loader-inline.js`: Loads DarkReader preventing AMD conflicts
-   - `scripts/better-moodle-uzl.user.js`: Your userscript
+    - `main.js`: Orchestrates loading order
+    - `polyfills/chrome.js`: Provides GM\_\* APIs via message passing
+    - `darkreader-loader-inline.js`: Loads DarkReader preventing AMD conflicts
+    - `scripts/better-moodle-uzl.user.js`: Your userscript
 
 2. **ISOLATED World (Content Script Context)**: Bridge between page and extension
-   - `content-script-bridge.js`: Handles chrome.storage and forwards XHR requests
+    - `content-script-bridge.js`: Handles chrome.storage and forwards XHR requests
 
 3. **Background Context (Service Worker)**: Has full extension permissions
-   - `background.js`: Registers MAIN world scripts and handles CORS-free XHR
+    - `background.js`: Registers MAIN world scripts and handles CORS-free XHR
 
 ### Script Loading
 
@@ -92,17 +96,20 @@ Scripts are registered via `chrome.scripting.registerContentScripts` with `world
 
 ```javascript
 // In background.js on install:
-chrome.scripting.registerContentScripts([{
-  id: 'better-moodle-main',
-  matches: ['https://moodle.uni-luebeck.de/*'],
-  js: ['main.js'],
-  runAt: 'document_start',
-  world: 'MAIN'  // Runs in page context!
-}]);
+chrome.scripting.registerContentScripts([
+    {
+        id: 'better-moodle-main',
+        matches: ['https://moodle.uni-luebeck.de/*'],
+        js: ['main.js'],
+        runAt: 'document_start',
+        world: 'MAIN', // Runs in page context!
+    },
+]);
 ```
 
 The `main.js` script then loads dependencies synchronously in the correct order:
-1. Polyfills (GM_* APIs)
+
+1. Polyfills (GM\_\* APIs)
 2. Wait for storage cache to initialize
 3. DarkReader (with AMD prevention)
 4. Userscript (with all dependencies ready)
@@ -111,22 +118,23 @@ The `main.js` script then loads dependencies synchronously in the correct order:
 
 The following Greasemonkey APIs are polyfilled for Chrome:
 
-| GM API | Chrome Implementation | Notes |
-|--------|----------------------|-------|
-| `GM_getValue` | `chrome.storage.local` | Synchronous with in-memory cache |
-| `GM_setValue` | `chrome.storage.local` | Synchronous wrapper with async backend |
-| `GM_deleteValue` | `chrome.storage.local` | Synchronous wrapper |
-| `GM_listValues` | `chrome.storage.local` | Lists all keys with prefix |
-| `GM_addValueChangeListener` | `chrome.storage.onChanged` | Monitors storage changes |
-| `GM_notification` | `chrome.notifications` | Full notification support |
-| `GM.xmlHttpRequest` | Background fetch + message passing | CORS bypass via host_permissions |
-| `GM_addStyle` | Direct DOM injection | Adds `<style>` elements |
-| `GM_info` | Constructed from `manifest.json` | Script metadata |
-| `unsafeWindow` | `window` | Direct window object |
+| GM API                      | Chrome Implementation              | Notes                                  |
+| --------------------------- | ---------------------------------- | -------------------------------------- |
+| `GM_getValue`               | `chrome.storage.local`             | Synchronous with in-memory cache       |
+| `GM_setValue`               | `chrome.storage.local`             | Synchronous wrapper with async backend |
+| `GM_deleteValue`            | `chrome.storage.local`             | Synchronous wrapper                    |
+| `GM_listValues`             | `chrome.storage.local`             | Lists all keys with prefix             |
+| `GM_addValueChangeListener` | `chrome.storage.onChanged`         | Monitors storage changes               |
+| `GM_notification`           | `chrome.notifications`             | Full notification support              |
+| `GM.xmlHttpRequest`         | Background fetch + message passing | CORS bypass via host_permissions       |
+| `GM_addStyle`               | Direct DOM injection               | Adds `<style>` elements                |
+| `GM_info`                   | Constructed from `manifest.json`   | Script metadata                        |
+| `unsafeWindow`              | `window`                           | Direct window object                   |
 
 ### Storage
 
 All storage keys are prefixed with `bm_` to avoid conflicts. The storage system uses:
+
 - In-memory cache for synchronous access (matching userscript behavior)
 - Message passing between MAIN world and content script
 - `chrome.storage.local` for persistence (via content script bridge)
@@ -135,6 +143,7 @@ All storage keys are prefixed with `bm_` to avoid conflicts. The storage system 
 ### Permissions
 
 The extension requires:
+
 - **`storage`**: For GM_getValue/GM_setValue functionality
 - **`notifications`**: For GM_notification functionality
 - **`scripting`**: For injecting scripts into MAIN world (page context)
@@ -151,14 +160,12 @@ To adapt this extension for Firefox or other browsers:
 3. Adjust host_permissions format if browser-specific syntax differs
 4. Test message passing between worlds (should work cross-browser)
 
-The core architecture (MAIN world injection + message passing) is browser-agnostic.ersion
-3. Import and use in `polyfills/index.js`
-4. Create a browser-specific loader (e.g., `polyfills/firefox.js`)
-5. Update manifest for the target browser
+The core architecture (MAIN world injection + message passing) is browser-agnostic.ersion 3. Import and use in `polyfills/index.js` 4. Create a browser-specific loader (e.g., `polyfills/firefox.js`) 5. Update manifest for the target browser
 
 ### Modifying Polyfills
 
 Each API is isolated in its own module:
+
 - **Storage**: `polyfills/browsers/chrome-storage.js`
 - **Notifications**: `polyfills/browsers/chrome-notifications.js`
 - **XHR**: `polyfills/browsers/chrome-xhr.js`
@@ -174,16 +181,19 @@ Each API is isolated in its own module:
 ## 🐛 Troubleshooting
 
 ### Extension not loading
+
 - Check that all required files are present in `extension/scripts/`
 - Verify icon files are present
 - Check browser console for errors
 
 ### Features not working
+
 - Open console and look for error messages
 - Verify that `GM_* APIs initialized` message appears
 - Check that permissions are granted in `chrome://extensions/`
 
 ### Storage issues
+
 - Open DevTools → Application → Storage → Extensions
 - Look for keys prefixed with `bm_`
 - Clear storage if needed: `chrome.storage.local.clear()`

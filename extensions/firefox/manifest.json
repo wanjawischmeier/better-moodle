@@ -5,29 +5,15 @@
     "description": "Improves UzL-Moodle by cool features and design improvements.",
     "author": "Jan (jxn_30), Yorik (YorikHansen)",
     "homepage_url": "https://github.com/jxn-30/better-moodle",
-    "icons": {
-        "48": "icon-48.png",
-        "128": "icon-128.png"
-    },
+    "icons": { "48": "icon-48.png", "128": "icon-128.png" },
     "browser_specific_settings": {
         "gecko": {
             "id": "{cfbc18b1-1707-4f1f-989e-7bcf321d50c5}",
-            "data_collection_permissions": {
-                "required": ["none"]
-            }
+            "data_collection_permissions": { "required": ["none"] }
         }
     },
-    "permissions": [
-        "storage",
-        "notifications",
-        "scripting",
-        "webNavigation"
-    ],
-    "background": {
-        "scripts": [
-            "background.js"
-        ]
-    },
+    "permissions": ["storage", "notifications", "scripting", "webNavigation"],
+    "background": { "scripts": ["background.js"] },
     "host_permissions": [
         "https://moodle.uni-luebeck.de/*",
         "https://better-moodle.dev/*",
@@ -47,24 +33,16 @@
     ],
     "content_scripts": [
         {
-            "matches": [
-                "https://moodle.uni-luebeck.de/*"
-            ],
-            "js": [
-                "content-script-bridge.js"
-            ],
+            "matches": ["https://moodle.uni-luebeck.de/*"],
+            "js": ["content-script-bridge.js"],
             "run_at": "document_start",
             "all_frames": false
         }
     ],
     "web_accessible_resources": [
         {
-            "resources": [
-                "scripts/*"
-            ],
-            "matches": [
-                "https://moodle.uni-luebeck.de/*"
-            ]
+            "resources": ["scripts/*"],
+            "matches": ["https://moodle.uni-luebeck.de/*"]
         }
     ]
 }

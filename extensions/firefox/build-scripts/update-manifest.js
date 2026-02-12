@@ -12,7 +12,7 @@ const rootDir = join(__dirname, '..');
 
 // Read package.json
 const packageJson = JSON.parse(
-  readFileSync(join(rootDir, '../../package.json'), 'utf-8')
+    readFileSync(join(rootDir, '../../package.json'), 'utf-8')
 );
 
 // Read current manifest.json
@@ -23,10 +23,6 @@ const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
 manifest.version = packageJson.version;
 
 // Write updated manifest
-writeFileSync(
-  manifestPath, 
-  JSON.stringify(manifest, null, 2) + '\n',
-  'utf-8'
-);
+writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf-8');
 
 console.log(`Updated manifest.json to version ${packageJson.version}`);

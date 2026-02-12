@@ -162,13 +162,12 @@ const SupportWrapper = (
     >
         {SupportBtn}
         <div className="d-flex flex-row flex-lg-column justify-content-center align-items-end">
-            {isExtension ? (
+            {isExtension ?
                 <span>
                     {LL.settings.modal.version()}:{' '}
                     <code>{GM_info.script.version}</code>
                 </span>
-            ) : (
-                <>
+            :   <>
                     <span>
                         {LL.settings.modal.installedVersion()}:{' '}
                         <code>{GM_info.script.version}</code>
@@ -177,7 +176,7 @@ const SupportWrapper = (
                         {LL.settings.modal.latestVersion()}: {latestVersionEl}
                     </span>
                 </>
-            )}
+            }
         </div>
     </div>
 );
@@ -234,7 +233,7 @@ const checkForUpdates = () => {
         latestVersionEl.replaceChildren('(managed by browser)');
         return Promise.resolve();
     }
-    
+
     return getLoadingSpinner()
         .then(spinner => latestVersionEl.replaceChildren(spinner))
         .then(() =>

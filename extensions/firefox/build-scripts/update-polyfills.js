@@ -21,10 +21,12 @@ const lines = polyfillContent.split('\n');
 
 // Find the GM_info section (should be around line 303-327)
 const gmInfoStart = lines.findIndex(line => line.includes('// GM_info'));
-const gmInfoEnd = lines.findIndex((line, i) => i > gmInfoStart && line.includes('// unsafeWindow'));
+const gmInfoEnd = lines.findIndex(
+    (line, i) => i > gmInfoStart && line.includes('// unsafeWindow')
+);
 
 if (gmInfoStart === -1 || gmInfoEnd === -1) {
-  throw new Error('Could not find GM_info section in polyfills.js');
+    throw new Error('Could not find GM_info section in polyfills.js');
 }
 
 // Extract static parts
