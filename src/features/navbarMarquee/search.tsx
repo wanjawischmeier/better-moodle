@@ -1,8 +1,9 @@
 import type { TextItem } from 'pdfjs-dist/types/src/display/api';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Index } from 'flexsearch';
-import { BooleanSetting } from '#lib/Settings/BooleanSetting';
 import Feature from '#lib/Feature';
+import { BooleanSetting } from '#lib/Settings/BooleanSetting';
+import { crawlCourse, getCurrentPageUrl, isCourseViewPage } from './search/crawler';
 
 const enabled = new BooleanSetting('enabled', true).addAlias('general.search');
 
@@ -38,6 +39,9 @@ let searchInput: HTMLInputElement | undefined;
 let resultsContainer: HTMLUListElement | undefined;
 let statsContainer: HTMLDivElement | undefined;
 let pdfUrlInput: HTMLInputElement | undefined;
+let crawlButton: HTMLButtonElement | undefined;
+let crawlProgress: HTMLDivElement | undefined;
+let isCrawling = false;
 
 const STORAGE_KEY = 'pdfSearchIndex';
 const METADATA_KEY = 'pdfSearchMetadata';
@@ -136,6 +140,13 @@ const updateStats = () => {
 // Index a PDF
 const indexPDF = async (pdfUrl: string) => {
     console.log(`[PDF Search] Starting to index PDF: ${pdfUrl}`);
+    
+    // Skip if already indexed
+    if (pdfMetadata.has(pdfUrl)) {
+        console.log(`[PDF Search] PDF already indexed: ${pdfUrl}`);
+        return;
+    }
+    
     const startTime = performance.now();
 
     try {
@@ -195,10 +206,14 @@ const indexPDF = async (pdfUrl: string) => {
         saveIndexToStorage();
         updateStats();
 
-        alert(`PDF indexed successfully!\n${pdf.numPages} pages processed.`);
+        if (!isCrawling) {
+            alert(`PDF indexed successfully!\n${pdf.numPages} pages processed.`);
+        }
     } catch (error) {
         console.error('[PDF Search] Error indexing PDF:', error);
-        alert(`Error indexing PDF: ${String(error)}`);
+        if (!isCrawling) {
+            alert(`Error indexing PDF: ${String(error)}`);
+        }
     }
 };
 
@@ -288,6 +303,67 @@ const togglePanel = (show: boolean) => {
     console.log(`[PDF Search] Panel ${show ? 'shown' : 'hidden'}`);
 };
 
+// Start crawling the current course
+const startCrawl = async () => {
+    if (isCrawling) {
+        console.log('[PDF Search] Crawl already in progress');
+        return;
+    }
+
+    console.log('[PDF Search] Starting course crawl');
+    isCrawling = true;
+
+    // Update button state
+    if (crawlButton) {
+        crawlButton.disabled = true;
+        crawlButton.textContent = 'Crawling...';
+    }
+
+    // Show progress
+    if (crawlProgress) {
+        crawlProgress.style.display = 'block';
+    }
+
+    const startUrl = getCurrentPageUrl();
+
+    try {
+        await crawlCourse(
+            startUrl,
+            progress => {
+                console.log('[PDF Search] Crawl progress:', progress);
+                if (crawlProgress) {
+                    crawlProgress.innerHTML = `
+                        <small>
+                            <strong>Progress:</strong><br/>
+                            Pages: ${progress.crawledPages}/${progress.totalPages}<br/>
+                            PDFs: ${progress.indexedPDFs}/${progress.totalPDFs}<br/>
+                            <span class="text-truncate d-block" style="max-width: 350px;">
+                                ${progress.currentUrl}
+                            </span>
+                        </small>
+                    `;
+                }
+            },
+            indexPDF
+        );
+
+        console.log('[PDF Search] Crawl complete');
+        alert('Course crawl complete! All PDFs have been indexed.');
+    } catch (error) {
+        console.error('[PDF Search] Crawl error:', error);
+        alert(`Crawl error: ${String(error)}`);
+    } finally {
+        isCrawling = false;
+        if (crawlButton) {
+            crawlButton.disabled = false;
+            crawlButton.textContent = 'Crawl Course';
+        }
+        if (crawlProgress) {
+            crawlProgress.style.display = 'none';
+        }
+    }
+};
+
 const createElements = () => {
     console.log('[PDF Search] Creating UI elements');
 
@@ -337,6 +413,33 @@ const createElements = () => {
         }
     });
 
+    // Crawl button (only show on course pages)
+    const showCrawlButton = isCourseViewPage();
+    console.log('[PDF Search] Show crawl button:', showCrawlButton);
+
+    if (showCrawlButton) {
+        crawlButton = (
+            <button className="btn btn-success btn-sm mt-2">
+                <i className="fa fa-sitemap mr-1" aria-hidden="true"></i>
+                Crawl Course
+            </button>
+        ) as HTMLButtonElement;
+
+        crawlButton.addEventListener('click', () => {
+            void startCrawl();
+        });
+
+        // Crawl progress indicator
+        crawlProgress = (
+            <div
+                className="alert alert-info mt-2 mb-0"
+                style={{ display: 'none', fontSize: '0.85rem', padding: '0.5rem' }}
+            >
+                <small>Starting crawl...</small>
+            </div>
+        ) as HTMLDivElement;
+    }
+
     // Search Panel
     panel = (
         <div
@@ -362,6 +465,12 @@ const createElements = () => {
                         {pdfUrlInput}
                         <div className="input-group-append">{addPdfButton}</div>
                     </div>
+                    {showCrawlButton && (
+                        <>
+                            <div className="mt-2">{crawlButton}</div>
+                            {crawlProgress}
+                        </>
+                    )}
                 </div>
                 {statsContainer}
             </div>
