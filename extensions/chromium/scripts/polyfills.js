@@ -323,29 +323,25 @@
         return style;
     };
 
-    // GM_info
-    window.GM_info = {
-        script: {
-            name: 'Better Moodle',
-            version: '2.6.7',
-            description:
-                'Improves moodle instances by cool features and design improvements.',
-            author: 'Jan (jxn_30), Yorik (YorikHansen)',
-            homepage: 'https://github.com/jxn-30/better-moodle',
-            downloadURL:
-                'https://github.com/jxn-30/better-moodle/releases/latest/download/better-moodle-uzl.user.js',
-            updateURL:
-                'https://github.com/jxn-30/better-moodle/releases/latest/download/better-moodle-uzl.meta.js',
-            namespace: 'https://uni-luebeck.de',
-            includes: ['https://moodle.uni-luebeck.de/*'],
-            matches: ['https://moodle.uni-luebeck.de/*'],
-            runAt: 'document-start',
-        },
-        scriptMetaStr:
-            '// @name Better Moodle\n// @version 2.6.7\n// @description Improves moodle instances by cool features and design improvements.',
-        scriptHandler: 'Extension',
-        version: '2.6.7',
-    };
+  // GM_info
+  window.GM_info = {
+    script: {
+      name: 'Better Moodle',
+      version: '2.6.7',
+      description: 'Improves moodle instances by cool features and design improvements.',
+      author: 'Jan (jxn_30), Yorik (YorikHansen)',
+      homepage: 'https://github.com/jxn-30/better-moodle',
+      downloadURL: 'https://github.com/jxn-30/better-moodle/releases/latest/download/better-moodle-uzl.user.js',
+      updateURL: 'https://github.com/jxn-30/better-moodle/releases/latest/download/better-moodle-uzl.meta.js',
+      namespace: 'https://uni-luebeck.de',
+      includes: ['https://moodle.uni-luebeck.de/*'],
+      matches: ['https://moodle.uni-luebeck.de/*'],
+      runAt: 'document-start'
+    },
+    scriptMetaStr: '// @name Better Moodle\n// @version 2.6.7\n// @description Improves moodle instances by cool features and design improvements.',
+    scriptHandler: 'Extension',
+    version: '2.6.7'
+  };
 
     // unsafeWindow
     window.unsafeWindow = window;
