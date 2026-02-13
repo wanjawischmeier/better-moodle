@@ -1,6 +1,7 @@
 import christmasCountdown from './christmasCountdown';
 import clock from './clock';
 import eventAdvertisements from './eventAdvertisements';
+import search from './search';
 import type { FeatureGroupTranslation } from '#types/i18n';
 
 export const de = {
@@ -17,6 +18,7 @@ export const de = {
         clock: clock.de,
         christmasCountdown: christmasCountdown.de,
         eventAdvertisements: eventAdvertisements.de,
+        search: search.de,
     },
 } satisfies FeatureGroupTranslation;
 
@@ -34,6 +36,7 @@ export const en = {
         clock: clock.en,
         christmasCountdown: christmasCountdown.en,
         eventAdvertisements: eventAdvertisements.en,
+        search: search.en,
     },
 } as typeof de;
 

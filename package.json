@@ -47,7 +47,9 @@
     "dependencies": {
         "@trim21/gm-fetch": "0.3.0",
         "darkreader": "4.9.120",
+        "flexsearch": "0.8.212",
         "jsx-dom": "8.1.6",
+        "pdfjs-dist": "5.4.624",
         "typesafe-i18n": "5.27.1"
     },
     "devDependencies": {
