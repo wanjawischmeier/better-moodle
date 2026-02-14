@@ -1,10 +1,16 @@
 // Types for PDF search functionality
 
+export interface CourseTag {
+    name: string;
+    url?: string;
+}
+
 export interface IndexedPage {
     id: string; // format: "pdfUrl|pageNum"
     pdfUrl: string;
     pageNum: number;
     text: string;
+    tags: CourseTag[];
 }
 
 export interface PDFMetadata {
@@ -12,6 +18,7 @@ export interface PDFMetadata {
     title: string;
     pageCount: number;
     indexedAt: number;
+    tags: CourseTag[];
 }
 
 export interface SearchStats {

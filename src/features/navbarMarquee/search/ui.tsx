@@ -1,19 +1,24 @@
 // UI components for PDF search
 import { crawlCourse, getCurrentPageUrl, isCourseViewPage } from './crawler';
-import type { PDFIndexer } from './indexing';
 import type { SearchEngine } from './search';
+import type { PDFIndexer } from './indexing';
 
+/**
+ * UI class for PDF search interface.
+ */
 export class SearchUI {
     private container: HTMLDivElement | undefined;
     private panel: HTMLDivElement | undefined;
     private searchInput: HTMLInputElement | undefined;
-    private searchHint: HTMLInputElement | undefined;
+    private searchHint: HTMLSpanElement | undefined;
     private resultsContainer: HTMLUListElement | undefined;
     private statsContainer: HTMLDivElement | undefined;
     private crawlButton: HTMLButtonElement | undefined;
     private crawlProgress: HTMLDivElement | undefined;
     private deleteButton: HTMLButtonElement | undefined;
+    private filterContainer: HTMLDivElement | undefined;
     private currentQuery = '';
+    private activeTags = new Set<string>();
 
     private indexer: PDFIndexer;
     private searchEngine: SearchEngine;
@@ -144,7 +149,28 @@ export class SearchUI {
         this.resultsContainer.innerHTML = '';
 
         if (resultIds.length === 0) {
-            const li = <li className="list-group-item text-muted">No results found</li>;
+            const li = (
+                <li className="list-group-item text-muted">
+                    No results found.{' '}
+                    {this.activeTags.size > 0 && (
+                        <button
+                            type="button"
+                            className="btn btn-link p-0"
+                            style={{ verticalAlign: 'baseline' }}
+                            onClick={() => {
+                                // Select all tags (same as "Select All" button)
+                                const allTags = this.searchEngine.getAllTags();
+                                this.activeTags = new Set(allTags.map(t => t.name));
+                                this.searchEngine.setActiveTags(this.activeTags);
+                                this.updateFilterUI();
+                                this.performSearch(this.currentQuery);
+                            }}
+                        >
+                            Search in all courses
+                        </button>
+                    )}
+                </li>
+            );
             this.resultsContainer.appendChild(li);
             return;
         }
@@ -200,14 +226,14 @@ export class SearchUI {
      * @param query - Current query
      */
     private updateHint(query: string): void {
-        if (!this.searchHint || !query) {
-            if (this.searchHint) this.searchHint.value = '';
+        if (!this.searchHint || !this.searchInput || !query) {
+            if (this.searchHint) this.searchHint.textContent = '';
             return;
         }
 
         const results = this.searchEngine.search(query);
         if (results.length === 0) {
-            this.searchHint.value = '';
+            this.searchHint.textContent = '';
             return;
         }
 
@@ -215,28 +241,125 @@ export class SearchUI {
         const topResult = indexedPages.get(results[0]);
         if (!topResult) return;
 
-        // Split query into words and get the last word being typed
-        const queryWords = query.split(/\s+/);
-        const lastWord = queryWords[queryWords.length - 1];
+        const queryLower = query.toLowerCase();
+        const resultText = topResult.text;
+        const resultLower = resultText.toLowerCase();
         
-        if (!lastWord) {
-            this.searchHint.value = '';
+        // Find where the query appears in the result
+        const matchIndex = resultLower.indexOf(queryLower);
+        if (matchIndex === -1) {
+            this.searchHint.textContent = '';
             return;
         }
 
-        // Find first word in result that starts with the last query word
-        const words = topResult.text.split(/\s+/);
-        for (const word of words) {
-            const cleanWord = word.replace(/[^a-zA-Z0-9]/g, '');
-            if (cleanWord.toLowerCase().startsWith(lastWord.toLowerCase()) && cleanWord.length > lastWord.length) {
-                // Replace the last word with the completed version
-                const completedWords = [...queryWords.slice(0, -1), cleanWord];
-                this.searchHint.value = completedWords.join(' ');
-                return;
-            }
+        // Get text after the match (the completion part only)
+        const afterMatch = resultText.substring(matchIndex + query.length);
+        
+        // Extract the next word or part of word as completion
+        const nextWordMatch = /^(\S+)/.exec(afterMatch);
+        if (nextWordMatch) {
+            const completion = nextWordMatch[1];
+            // Show only the completion part that extends what user typed
+            this.searchHint.textContent = completion;
+        } else {
+            this.searchHint.textContent = '';
+        }
+    }
+
+    /**
+     * Update course filter UI.
+     */
+    private updateFilterUI(): void {
+        console.log('[PDF Search] updateFilterUI called');
+        
+        if (!this.filterContainer) {
+            console.warn('[PDF Search] updateFilterUI: filterContainer is undefined');
+            return;
         }
 
-        this.searchHint.value = '';
+        const allTags = this.searchEngine.getAllTags();
+        console.log(`[PDF Search] updateFilterUI: Got ${allTags.length} tags from search engine`);
+        
+        if (allTags.length === 0) {
+            this.filterContainer.style.display = 'none';
+            console.log('[PDF Search] updateFilterUI: No tags, hiding filter container');
+            return;
+        }
+
+        // Auto-select current course tag if on a course page
+        const currentUrl = window.location.href;
+        const matchingTag = allTags.find(tag => tag.url && currentUrl.includes(tag.url));
+        if (matchingTag && this.activeTags.size === 0) {
+            this.activeTags.add(matchingTag.name);
+            this.searchEngine.setActiveTags(this.activeTags);
+            console.log(`[PDF Search] Auto-selected current course tag: ${matchingTag.name}`);
+        }
+
+        console.log('[PDF Search] updateFilterUI: Showing filter UI with tags:', allTags);
+        this.filterContainer.style.display = 'block';
+        this.filterContainer.innerHTML = '<small class="text-muted d-block mb-1"><strong>Filter by course:</strong></small>';
+
+        const checkboxContainer = <div className="d-flex flex-column" style={{ maxHeight: '150px', overflowY: 'auto' }} />;
+        
+        for (const tag of allTags) {
+            const label = (
+                <label className="d-flex align-items-center mb-1" style={{ cursor: 'pointer' }}>
+                    <input
+                        type="checkbox"
+                        className="mr-1"
+                        checked={this.activeTags.size === 0 || this.activeTags.has(tag.name)}
+                    />
+                    <small>{tag.name}</small>
+                </label>
+            ) as HTMLLabelElement;
+
+            const checkbox = label.querySelector('input')!;
+            checkbox.addEventListener('change', () => {
+                if (checkbox.checked) {
+                    this.activeTags.add(tag.name);
+                } else {
+                    this.activeTags.delete(tag.name);
+                }
+                
+                this.searchEngine.setActiveTags(this.activeTags);
+                this.performSearch(this.currentQuery);
+            });
+
+            checkboxContainer.appendChild(label);
+        }
+
+        // Add "Select All" helper
+        if (allTags.length > 1) {
+            const selectAllBtn = (
+                <button className="btn btn-sm btn-link p-0 mt-1" style={{ fontSize: '0.75rem' }}>
+                    {this.activeTags.size === 0 || this.activeTags.size === allTags.length ? 'Deselect All' : 'Select All'}
+                </button>
+            ) as HTMLButtonElement;
+
+            selectAllBtn.addEventListener('click', () => {
+                const shouldSelectAll = this.activeTags.size !== allTags.length;
+                
+                if (shouldSelectAll) {
+                    this.activeTags = new Set(allTags.map(t => t.name));
+                    selectAllBtn.textContent = 'Deselect All';
+                } else {
+                    this.activeTags.clear();
+                    selectAllBtn.textContent = 'Select All';
+                }
+                
+                // Update all checkboxes
+                checkboxContainer.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach(cb => {
+                    cb.checked = shouldSelectAll;
+                });
+                
+                this.searchEngine.setActiveTags(this.activeTags);
+                this.performSearch(this.currentQuery);
+            });
+
+            this.filterContainer.appendChild(selectAllBtn);
+        }
+
+        this.filterContainer.appendChild(checkboxContainer);
     }
 
     /**
@@ -288,11 +411,12 @@ export class SearchUI {
                         `;
                     }
                 },
-                url => this.indexer.indexPDF(url)
+                (url, tags) => this.indexer.indexPDF(url, tags)
             );
 
             console.log('[PDF Search] Crawl complete');
             alert('Course crawl complete! All PDFs have been indexed.');
+            this.updateFilterUI();
         } catch (error) {
             console.error('[PDF Search] Crawl error:', error);
             alert(`Crawl error: ${String(error)}`);
@@ -352,11 +476,19 @@ export class SearchUI {
         this.deleteButton.addEventListener('click', () => {
             if (confirm('Are you sure you want to delete the entire search index? This cannot be undone.')) {
                 this.indexer.clearIndex();
+                this.activeTags.clear();
+                this.searchEngine.setActiveTags(this.activeTags);
                 this.performSearch('');
                 this.updateStatsDisplay();
+                this.updateFilterUI();
                 alert('Search index cleared successfully.');
             }
         });
+
+        // Filter container
+        this.filterContainer = (
+            <div className="border-top pt-2 mt-2" style={{ display: 'none' }} />
+        ) as HTMLDivElement;
 
         // Crawl button (only show on course pages)
         const showCrawlButton = isCourseViewPage();
@@ -406,6 +538,7 @@ export class SearchUI {
                 <div className="card-body">
                     <h5 className="card-title">PDF Search</h5>
                     {this.resultsContainer}
+                    {this.filterContainer}
                     {showCrawlButton && (
                         <div className="border-top pt-2 mt-2">
                             <div className="d-flex gap-2">
@@ -427,26 +560,8 @@ export class SearchUI {
 
         // Search Input with autocomplete hint
         const searchWrapper = (
-            <div style={{ position: 'relative', width: '200px' }} />
+            <div style={{ display: 'flex', position: 'relative', width: '200px' }} />
         ) as HTMLDivElement;
-
-        this.searchHint = (
-            <input
-                type="text"
-                className="form-control form-control-sm"
-                style={{
-                    position: 'absolute',
-                    top: '0',
-                    left: '0',
-                    width: '100%',
-                    color: '#999',
-                    backgroundColor: 'transparent',
-                    pointerEvents: 'none',
-                    border: 'none'
-                }}
-                disabled
-            />
-        ) as HTMLInputElement;
 
         this.searchInput = (
             <input
@@ -454,12 +569,31 @@ export class SearchUI {
                 className="form-control form-control-sm"
                 placeholder="Search PDFs..."
                 style={{
-                    position: 'relative',
+                    position: 'absolute',
                     width: '100%',
+                    zIndex: 2,
                     backgroundColor: 'transparent'
                 }}
             />
         ) as HTMLInputElement;
+
+        this.searchHint = (
+            <span
+                style={{
+                    position: 'absolute',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    left: '12px',
+                    color: '#999',
+                    pointerEvents: 'none',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    fontSize: 'inherit',
+                    fontFamily: 'inherit',
+                    zIndex: 1
+                }}
+            />
+        ) as HTMLSpanElement;
 
         searchWrapper.appendChild(this.searchHint);
         searchWrapper.appendChild(this.searchInput);
@@ -467,15 +601,30 @@ export class SearchUI {
         this.searchInput.addEventListener('focus', () => this.togglePanel(true));
         this.searchInput.addEventListener('input', e => {
             const query = (e.target as HTMLInputElement).value;
+            
+            // Update hint position based on input text width
+            if (this.searchHint && this.searchInput) {
+                const tempSpan = document.createElement('span');
+                tempSpan.style.visibility = 'hidden';
+                tempSpan.style.position = 'absolute';
+                tempSpan.style.font = window.getComputedStyle(this.searchInput).font;
+                tempSpan.textContent = query;
+                document.body.appendChild(tempSpan);
+                const textWidth = tempSpan.offsetWidth;
+                document.body.removeChild(tempSpan);
+                
+                this.searchHint.style.left = `${12 + textWidth}px`;
+            }
+            
             this.performSearch(query);
         });
         
         // Accept hint on Tab key
         this.searchInput.addEventListener('keydown', e => {
-            if (e.key === 'Tab' && this.searchHint?.value) {
+            if (e.key === 'Tab' && this.searchHint?.textContent) {
                 e.preventDefault();
-                this.searchInput!.value = this.searchHint.value;
-                this.performSearch(this.searchHint.value);
+                this.searchInput!.value = this.searchInput!.value + this.searchHint.textContent;
+                this.performSearch(this.searchInput!.value);
             }
         });
 
@@ -500,6 +649,14 @@ export class SearchUI {
         });
 
         console.log('[PDF Search] UI elements created');
+    }
+
+    /**
+     * Initialize filter UI after loading.
+     */
+    public initializeFilters(): void {
+        console.log('[PDF Search] initializeFilters called');
+        this.updateFilterUI();
     }
 
     /**

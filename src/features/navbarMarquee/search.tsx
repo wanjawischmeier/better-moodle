@@ -1,5 +1,6 @@
 // PDF Search Feature
 import * as pdfjsLib from 'pdfjs-dist';
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { Index } from 'flexsearch';
 import { BooleanSetting } from '#lib/Settings/BooleanSetting';
 import Feature from '#lib/Feature';
@@ -16,6 +17,7 @@ let searchIndex: Index | undefined;
 let indexer: PDFIndexer | undefined;
 let searchEngine: SearchEngine | undefined;
 let ui: SearchUI | undefined;
+let workerConfigured = false;
 
 /**
  * Initialize the FlexSearch index.
@@ -42,6 +44,10 @@ const updateStats = (): void => {
 
     const indexedPages = indexer.getIndexedPages();
     const pdfMetadata = indexer.getPDFMetadata();
+    
+    // Update search engine's reference to indexed pages for filtering
+    searchEngine.setIndexedPages(indexedPages);
+    
     const indexSize = new Blob([
         JSON.stringify(Array.from(indexedPages.values())),
     ]).size;
@@ -57,19 +63,11 @@ const onload = (): void => {
     console.log('[PDF Search] Feature loading...');
 
     if (enabled.value) {
-        // Configure PDF.js worker dynamically (only once)
-        if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-            void import('pdfjs-dist/build/pdf.worker.min.mjs?url')
-                .then(worker => {
-                    pdfjsLib.GlobalWorkerOptions.workerSrc = worker.default;
-                    console.log(
-                        '[PDF Search] Worker configured:',
-                        pdfjsLib.GlobalWorkerOptions.workerSrc
-                    );
-                })
-                .catch(error => {
-                    console.error('[PDF Search] Failed to load worker:', error);
-                });
+        // Configure PDF.js worker (only once)
+        if (!workerConfigured) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+            workerConfigured = true;
+            console.log('[PDF Search] Worker configured:', pdfjsLib.GlobalWorkerOptions.workerSrc);
         }
 
         // Initialize components
@@ -80,18 +78,24 @@ const onload = (): void => {
         if (!indexer && searchIndex) {
             indexer = new PDFIndexer();
             indexer.setIndex(searchIndex);
+            indexer.setOnIndexUpdate(() => {
+                updateStats();
+                ui?.initializeFilters();
+            });
             indexer.loadFromStorage();
-            updateStats();
         }
 
-        if (!searchEngine && searchIndex) {
+        if (!searchEngine && searchIndex && indexer) {
             searchEngine = new SearchEngine();
             searchEngine.setIndex(searchIndex);
+            searchEngine.setIndexedPages(indexer.getIndexedPages());
+            updateStats();
         }
 
         if (!ui && indexer && searchEngine) {
             ui = new SearchUI(indexer, searchEngine);
             ui.createElements();
+            ui.initializeFilters();
             updateStats();
         }
 
