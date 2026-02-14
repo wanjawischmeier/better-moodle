@@ -216,6 +216,8 @@ export class SearchInput {
     public clear(): void {
         this.input.value = '';
         this.hint.textContent = '';
+        // Trigger search with empty query to clear results
+        this.onSearch('');
         // Use setTimeout to ensure blur happens after any focus events
         setTimeout(() => this.input.blur(), 0);
     }
