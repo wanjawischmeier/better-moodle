@@ -20,7 +20,7 @@ export class ResultsList {
                 style={{ 
                     maxHeight: '400px', 
                     overflowY: 'auto',
-                    scrollbarWidth: 'thin'
+                    scrollbarWidth: 'none'
                 }}
             >
                 <li className="list-group-item text-muted">

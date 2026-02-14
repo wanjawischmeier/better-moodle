@@ -143,8 +143,7 @@ export class SearchUI {
         // Create search panel
         this.panel = (
             <div className="dropdown-menu dropdown-menu-right" style="width: 400px;">
-                <div className="card-body">
-                    <h5 className="card-title">PDF Search</h5>
+                <div className="mx-2">
                     {this.resultsList.getElement()}
                     {this.courseFilter.getElement()}
                     {showCrawlButton && (
