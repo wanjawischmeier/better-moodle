@@ -28,23 +28,27 @@ export class SearchInput {
 
         // Create container with input-like styling
         this.container = (
-            <div 
+            <div
                 className="form-control form-control-sm p-0"
                 style={{
                     display: 'flex',
                     alignItems: 'center',
                     width: '200px',
                     position: 'relative',
-                    overflow: 'hidden'
+                    overflow: 'hidden',
                 }}
             />
         ) as HTMLDivElement;
 
         // Add search icon wrapper
         const iconWrapper = (
-            <div data-region="navbar-icon" className="ml-2" style="background-color: white; z-index: 1000;">
-                <i 
-                    className="icon fa fa-search" 
+            <div
+                data-region="navbar-icon"
+                className="ml-2"
+                style="background-color: white; z-index: 1000;"
+            >
+                <i
+                    className="icon fa fa-search"
                     title="Search"
                     role="img"
                     aria-label="Search"
@@ -55,13 +59,15 @@ export class SearchInput {
 
         // Create text container (holds input + hint)
         const textContainer = (
-            <div style={{ 
-                position: 'relative', 
-                flex: 1,
-                minWidth: 0,
-                display: 'flex',
-                alignItems: 'center'
-            }} />
+            <div
+                style={{
+                    position: 'relative',
+                    flex: 1,
+                    minWidth: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                }}
+            />
         ) as HTMLDivElement;
 
         // Create hint (behind input)
@@ -73,7 +79,7 @@ export class SearchInput {
                     color: '#999',
                     pointerEvents: 'none',
                     whiteSpace: 'pre',
-                    userSelect: 'none'
+                    userSelect: 'none',
                 }}
             />
         ) as HTMLSpanElement;
@@ -90,7 +96,7 @@ export class SearchInput {
                     padding: 0,
                     margin: 0,
                     width: '100%',
-                    zIndex: 10
+                    zIndex: 10,
                 }}
             />
         ) as HTMLInputElement;
@@ -104,7 +110,7 @@ export class SearchInput {
 
     private attachEventListeners(): void {
         this.input.addEventListener('focus', () => this.onFocus());
-        
+
         this.input.addEventListener('input', () => {
             const query = this.input.value;
             this.updateHint(query);
@@ -115,15 +121,20 @@ export class SearchInput {
             // Sync hint scroll with input scroll
             this.hint.style.transform = `translateX(-${this.input.scrollLeft}px)`;
         });
-        
+
         // Accept hint on Tab or Right Arrow at end of input
         this.input.addEventListener('keydown', e => {
             const atEnd = this.input.selectionStart === this.input.value.length;
-            
-            if ((e.key === 'Tab' || (e.key === 'ArrowRight' && atEnd)) && this.hint.textContent) {
+
+            if (
+                (e.key === 'Tab' || (e.key === 'ArrowRight' && atEnd)) &&
+                this.hint.textContent
+            ) {
                 e.preventDefault();
                 const currentValue = this.input.value;
-                const completion = this.hint.textContent.substring(currentValue.length);
+                const completion = this.hint.textContent.substring(
+                    currentValue.length
+                );
                 this.input.value = currentValue + completion;
                 this.updateHint(this.input.value);
                 this.onSearch(this.input.value);
@@ -133,7 +144,8 @@ export class SearchInput {
         // Add focus styling to container
         this.input.addEventListener('focus', () => {
             this.container.style.borderColor = '#80bdff';
-            this.container.style.boxShadow = '0 0 0 0.2rem rgba(0, 123, 255, 0.25)';
+            this.container.style.boxShadow =
+                '0 0 0 0.2rem rgba(0, 123, 255, 0.25)';
         });
 
         this.input.addEventListener('blur', () => {
@@ -168,7 +180,7 @@ export class SearchInput {
         const queryLower = query.toLowerCase();
         const resultText = topResult.text;
         const resultLower = resultText.toLowerCase();
-        
+
         // Find where the query appears in the result
         const matchIndex = resultLower.indexOf(queryLower);
         if (matchIndex === -1) {
@@ -178,14 +190,14 @@ export class SearchInput {
 
         // Get text after the match (the completion part only)
         const afterMatch = resultText.substring(matchIndex + query.length);
-        
+
         // Extract the next word or part of word as completion
         const nextWordMatch = /^(\S+)/.exec(afterMatch);
         if (nextWordMatch) {
             const completion = nextWordMatch[1];
             // Show query + completion (hint shows full text, input covers first part)
             this.hint.textContent = query + completion;
-            
+
             // Sync scroll position
             this.hint.style.transform = `translateX(-${this.input.scrollLeft}px)`;
         } else {
@@ -199,5 +211,12 @@ export class SearchInput {
 
     public getValue(): string {
         return this.input.value;
+    }
+
+    public clear(): void {
+        this.input.value = '';
+        this.hint.textContent = '';
+        // Use setTimeout to ensure blur happens after any focus events
+        setTimeout(() => this.input.blur(), 0);
     }
 }

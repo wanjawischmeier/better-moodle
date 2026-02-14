@@ -17,10 +17,10 @@ export class ResultsList {
         this.container = (
             <ul
                 className="list-group list-group-flush"
-                style={{ 
-                    maxHeight: '400px', 
+                style={{
+                    maxHeight: '400px',
                     overflowY: 'auto',
-                    scrollbarWidth: 'none'
+                    scrollbarWidth: 'none',
                 }}
             >
                 <li className="list-group-item text-muted">
@@ -49,15 +49,15 @@ export class ResultsList {
      */
     private highlightMatches(text: string, query: string): string {
         if (!query) return text;
-        
+
         const words = query.split(/\s+/).filter(w => w.length > 0);
         let result = text;
-        
+
         for (const word of words) {
             const regex = new RegExp(`(${word})`, 'gi');
             result = result.replace(regex, '<mark>$1</mark>');
         }
-        
+
         return result;
     }
 
@@ -89,13 +89,13 @@ export class ResultsList {
         // Start snippet slightly before the match (for context)
         const contextBefore = 20;
         const start = Math.max(0, matchIndex - contextBefore);
-        
+
         // Extract snippet
         let snippet = text.substring(start, start + maxLength);
-        
+
         // Add ellipsis if not starting from beginning
         if (start > 0) {
-            snippet = `...${  snippet.trimStart()}`;
+            snippet = `...${snippet.trimStart()}`;
         }
 
         return snippet;
@@ -141,7 +141,10 @@ export class ResultsList {
             }
 
             const snippet = this.getSnippet(page.text, this.currentQuery, 150);
-            const highlightedPreview = this.highlightMatches(snippet, this.currentQuery);
+            const highlightedPreview = this.highlightMatches(
+                snippet,
+                this.currentQuery
+            );
 
             const li = (
                 <li
@@ -149,7 +152,8 @@ export class ResultsList {
                     style={{ cursor: 'pointer' }}
                 >
                     <strong>
-                        {this.getCleanFilename(page.pdfUrl)} - Page {page.pageNum}
+                        {this.getCleanFilename(page.pdfUrl)} - Page{' '}
+                        {page.pageNum}
                     </strong>
                     <br />
                     <small className="text-muted" />

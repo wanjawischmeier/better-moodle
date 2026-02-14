@@ -15,8 +15,9 @@ export class StatsDisplay {
         this.container = (
             <div className="border-top pt-2 mt-2">
                 <small>
-                    <strong>Stats:</strong> {stats.totalDocs} PDFs, {stats.totalPages}{' '}
-                    pages, {(stats.indexSize / 1024).toFixed(2)} KB
+                    <strong>Stats:</strong> {stats.totalDocs} PDFs,{' '}
+                    {stats.totalPages} pages,{' '}
+                    {(stats.indexSize / 1024).toFixed(2)} KB
                 </small>
             </div>
         ) as HTMLDivElement;

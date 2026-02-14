@@ -20,7 +20,7 @@ export class SearchUI {
     private crawlControls: CrawlControls | undefined;
     private statsDisplay: StatsDisplay | undefined;
     private deleteButton: HTMLButtonElement | undefined;
-    
+
     private currentQuery = '';
     private activeTags = new Set<string>();
 
@@ -49,9 +49,12 @@ export class SearchUI {
             this.panel.classList.add('show');
         } else {
             this.panel.classList.remove('show');
-        }
 
-        console.log(`[PDF Search] Panel ${show ? 'hidden' : 'shown'}`);
+            // Clear search when closing panel
+            if (this.searchInput) {
+                this.searchInput.clear();
+            }
+        }
     }
 
     /**
@@ -61,12 +64,12 @@ export class SearchUI {
     private performSearch(query: string): void {
         this.currentQuery = query;
         const results = this.searchEngine.search(query);
-        
+
         if (this.resultsList) {
             this.resultsList.setQuery(query);
             this.resultsList.render(results, this.activeTags.size > 0);
         }
-        
+
         if (this.statsDisplay) {
             this.statsDisplay.update();
         }
@@ -79,11 +82,11 @@ export class SearchUI {
         const allTags = this.searchEngine.getAllTags();
         this.activeTags = new Set(allTags.map(t => t.name));
         this.searchEngine.setActiveTags(this.activeTags);
-        
+
         if (this.courseFilter) {
             this.courseFilter.update();
         }
-        
+
         this.performSearch(this.currentQuery);
     }
 
@@ -94,11 +97,17 @@ export class SearchUI {
         console.log('[PDF Search] Creating UI elements');
 
         // Create components
-        this.resultsList = new ResultsList(this.indexer, () => this.searchAllCourses());
-        this.courseFilter = new CourseFilter(this.searchEngine, this.activeTags, () => this.performSearch(this.currentQuery));
+        this.resultsList = new ResultsList(this.indexer, () =>
+            this.searchAllCourses()
+        );
+        this.courseFilter = new CourseFilter(
+            this.searchEngine,
+            this.activeTags,
+            () => this.performSearch(this.currentQuery)
+        );
         this.statsDisplay = new StatsDisplay(this.searchEngine);
         this.searchInput = new SearchInput(
-            this.searchEngine, 
+            this.searchEngine,
             this.indexer,
             (query: string) => this.performSearch(query),
             () => this.togglePanel(true)
@@ -113,7 +122,11 @@ export class SearchUI {
         ) as HTMLButtonElement;
 
         this.deleteButton.addEventListener('click', () => {
-            if (confirm('Are you sure you want to delete the entire search index? This cannot be undone.')) {
+            if (
+                confirm(
+                    'Are you sure you want to delete the entire search index? This cannot be undone.'
+                )
+            ) {
                 this.indexer.clearIndex();
                 this.activeTags.clear();
                 this.searchEngine.setActiveTags(this.activeTags);
@@ -142,7 +155,10 @@ export class SearchUI {
 
         // Create search panel
         this.panel = (
-            <div className="dropdown-menu dropdown-menu-right" style="width: 400px;">
+            <div
+                className="dropdown-menu dropdown-menu-right"
+                style="width: 400px;"
+            >
                 <div className="mx-2">
                     {this.resultsList.getElement()}
                     {this.courseFilter.getElement()}
@@ -174,7 +190,11 @@ export class SearchUI {
 
         // Add close listener for clicking outside
         document.addEventListener('click', e => {
-            if (!this.container?.contains(e.target as Node)) {
+            const target = e.target as Node;
+            if (
+                !this.container?.contains(target) &&
+                this.panel?.classList.contains('show')
+            ) {
                 this.togglePanel(false);
             }
         });

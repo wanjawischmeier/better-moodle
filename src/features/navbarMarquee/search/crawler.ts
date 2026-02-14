@@ -78,7 +78,9 @@ const extractCourseTags = (doc: Document, pageUrl: string): CourseTag[] => {
     const tags: CourseTag[] = [];
 
     // Try to get course shortname from page header
-    const pageHeader = doc.querySelector('.page-header-headings h1, .page-context-header h1');
+    const pageHeader = doc.querySelector(
+        '.page-header-headings h1, .page-context-header h1'
+    );
     if (pageHeader) {
         const courseName = pageHeader.textContent?.trim();
         if (courseName) {
@@ -89,13 +91,18 @@ const extractCourseTags = (doc: Document, pageUrl: string): CourseTag[] => {
     }
 
     // Fallback: try breadcrumb
-    const breadcrumbCourse = doc.querySelector('.breadcrumb li:nth-child(2) a, nav[aria-label="Navigation bar"] ol li:nth-child(2) a');
+    const breadcrumbCourse = doc.querySelector(
+        '.breadcrumb li:nth-child(2) a, nav[aria-label="Navigation bar"] ol li:nth-child(2) a'
+    );
     if (breadcrumbCourse) {
         const courseName = breadcrumbCourse.textContent?.trim();
-        const courseUrl = (breadcrumbCourse as HTMLAnchorElement).href || pageUrl;
+        const courseUrl =
+            (breadcrumbCourse as HTMLAnchorElement).href || pageUrl;
         if (courseName) {
             tags.push({ name: courseName, url: courseUrl });
-            console.log(`[PDF Crawler] Extracted course tag from breadcrumb: ${courseName}`);
+            console.log(
+                `[PDF Crawler] Extracted course tag from breadcrumb: ${courseName}`
+            );
             return tags;
         }
     }
@@ -155,7 +162,9 @@ const categorizeUrl = (url: string): 'crawl' | 'pdf' | 'ignore' => {
  * @param url - The URL to fetch
  * @returns Parsed DOM document and final URL after redirects
  */
-const fetchPageDOM = async (url: string): Promise<{ doc: Document; finalUrl: string }> => {
+const fetchPageDOM = async (
+    url: string
+): Promise<{ doc: Document; finalUrl: string }> => {
     console.log(`[PDF Crawler] Fetching page: ${url}`);
     const response = await fetch(url);
     const finalUrl = response.url;
@@ -196,7 +205,9 @@ const crawlPage = async (
 
     // Check recursion depth limit
     if (depth >= MAX_CRAWL_DEPTH) {
-        console.log(`[PDF Crawler] Max depth (${MAX_CRAWL_DEPTH}) reached, skipping: ${url}`);
+        console.log(
+            `[PDF Crawler] Max depth (${MAX_CRAWL_DEPTH}) reached, skipping: ${url}`
+        );
         return;
     }
 
@@ -211,27 +222,37 @@ const crawlPage = async (
         progress.currentUrl = url;
         onProgress({ ...progress });
 
-        console.log(`[PDF Crawler] Crawling page ${progress.crawledPages}/${progress.totalPages}: ${url} (active: ${activeCrawls}, depth: ${depth})`);
+        console.log(
+            `[PDF Crawler] Crawling page ${progress.crawledPages}/${progress.totalPages}: ${url} (active: ${activeCrawls}, depth: ${depth})`
+        );
 
         const { doc, finalUrl } = await fetchPageDOM(url);
-        
+
         // Check if the page redirected to a PDF (common for resource pages)
         if (finalUrl !== url && categorizeUrl(finalUrl) === 'pdf') {
-            console.log(`[PDF Crawler] Resource page redirected to PDF: ${finalUrl}`);
+            console.log(
+                `[PDF Crawler] Resource page redirected to PDF: ${finalUrl}`
+            );
             progress.totalPDFs++;
             onProgress({ ...progress });
-            
+
             try {
-                console.log(`[PDF Crawler] Indexing redirected PDF: ${finalUrl} with tags:`, courseTags);
+                console.log(
+                    `[PDF Crawler] Indexing redirected PDF: ${finalUrl} with tags:`,
+                    courseTags
+                );
                 await indexPDF(finalUrl, courseTags);
                 progress.indexedPDFs++;
                 onProgress({ ...progress });
             } catch (error) {
-                console.error(`[PDF Crawler] Error indexing redirected PDF ${finalUrl}:`, error);
+                console.error(
+                    `[PDF Crawler] Error indexing redirected PDF ${finalUrl}:`,
+                    error
+                );
             }
             return;
         }
-        
+
         const links = extractLinks(doc);
 
         const crawlLinks: string[] = [];
@@ -247,7 +268,9 @@ const crawlPage = async (
             }
         }
 
-        console.log(`[PDF Crawler] Found ${crawlLinks.length} pages to crawl, ${pdfLinks.length} PDFs`);
+        console.log(
+            `[PDF Crawler] Found ${crawlLinks.length} pages to crawl, ${pdfLinks.length} PDFs`
+        );
 
         // Update totals
         progress.totalPages += crawlLinks.length;
@@ -261,12 +284,18 @@ const crawlPage = async (
             await Promise.all(
                 batch.map(async pdfUrl => {
                     try {
-                        console.log(`[PDF Crawler] Indexing PDF: ${pdfUrl} with tags:`, courseTags);
+                        console.log(
+                            `[PDF Crawler] Indexing PDF: ${pdfUrl} with tags:`,
+                            courseTags
+                        );
                         await indexPDF(pdfUrl, courseTags);
                         progress.indexedPDFs++;
                         onProgress({ ...progress });
                     } catch (error) {
-                        console.error(`[PDF Crawler] Error indexing PDF ${pdfUrl}:`, error);
+                        console.error(
+                            `[PDF Crawler] Error indexing PDF ${pdfUrl}:`,
+                            error
+                        );
                     }
                 })
             );
@@ -278,7 +307,15 @@ const crawlPage = async (
             const batch = crawlLinks.slice(i, i + PARALLEL_LIMIT);
             await Promise.all(
                 batch.map(link =>
-                    crawlPage(link, visitedUrls, onProgress, indexPDF, progress, courseTags, depth + 1)
+                    crawlPage(
+                        link,
+                        visitedUrls,
+                        onProgress,
+                        indexPDF,
+                        progress,
+                        courseTags,
+                        depth + 1
+                    )
                 )
             );
         }
@@ -322,7 +359,14 @@ export const crawlCourse = async (
 
     onProgress(progress);
 
-    await crawlPage(startUrl, visitedUrls, onProgress, indexPDF, progress, courseTags);
+    await crawlPage(
+        startUrl,
+        visitedUrls,
+        onProgress,
+        indexPDF,
+        progress,
+        courseTags
+    );
 
     console.log('[PDF Crawler] Crawl complete:', progress);
 };

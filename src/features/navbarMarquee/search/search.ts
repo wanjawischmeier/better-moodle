@@ -50,7 +50,7 @@ export class SearchEngine {
             console.log('[PDF Search] getAllTags: No indexed pages');
             return [];
         }
-        
+
         const tagsMap = new Map<string, CourseTag>();
         for (const page of this.indexedPages.values()) {
             for (const tag of page.tags) {
@@ -59,9 +59,14 @@ export class SearchEngine {
                 }
             }
         }
-        
-        const result = Array.from(tagsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-        console.log(`[PDF Search] getAllTags: Found ${result.length} unique tags:`, result);
+
+        const result = Array.from(tagsMap.values()).sort((a, b) =>
+            a.name.localeCompare(b.name)
+        );
+        console.log(
+            `[PDF Search] getAllTags: Found ${result.length} unique tags:`,
+            result
+        );
         return result;
     }
 
@@ -79,7 +84,11 @@ export class SearchEngine {
      * @param totalPages - Number of indexed pages
      * @param indexSize - Size of the index in bytes
      */
-    public updateStats(totalDocs: number, totalPages: number, indexSize: number) {
+    public updateStats(
+        totalDocs: number,
+        totalPages: number,
+        indexSize: number
+    ) {
         this.stats.totalDocs = totalDocs;
         this.stats.totalPages = totalPages;
         this.stats.indexSize = indexSize;
@@ -101,24 +110,28 @@ export class SearchEngine {
         }
 
         try {
-            const results = this.searchIndex.search(query, { limit: 100 }) as string[];
-            
+            const results = this.searchIndex.search(query, {
+                limit: 100,
+            }) as string[];
+
             // Filter by active tags if any are selected
             let filteredResults = results;
             if (this.activeTags.size > 0 && this.indexedPages) {
                 filteredResults = results.filter(id => {
                     const page = this.indexedPages!.get(id);
                     if (!page) return false;
-                    
+
                     // Check if page has any of the active tags (by name)
                     return page.tags.some(tag => this.activeTags.has(tag.name));
                 });
-                console.log(`[PDF Search] Filtered from ${results.length} to ${filteredResults.length} results by tags`);
+                console.log(
+                    `[PDF Search] Filtered from ${results.length} to ${filteredResults.length} results by tags`
+                );
             }
-            
+
             // Limit final results
             filteredResults = filteredResults.slice(0, 20);
-            
+
             const endTime = performance.now();
             this.stats.lastQueryTime = endTime - startTime;
 

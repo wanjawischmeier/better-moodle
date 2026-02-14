@@ -1,8 +1,12 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 // PDF indexing logic
-import * as pdfjsLib from 'pdfjs-dist';
 import type { TextItem } from 'pdfjs-dist/types/src/display/api';
 import type { Index } from 'flexsearch';
 import type { CourseTag, IndexedPage, PDFMetadata } from './types';
+
+// PDF.js will be provided dynamically from CDN
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let pdfjsLib: any = null;
 
 /**
  * PDF indexer class.
@@ -17,6 +21,16 @@ export class PDFIndexer {
 
     private readonly STORAGE_KEY = 'pdfSearchIndex';
     private readonly METADATA_KEY = 'pdfSearchMetadata';
+
+    /**
+     * Set PDF.js library (loaded from CDN).
+     * @param lib - The PDF.js library
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    public setPdfJsLib(lib: any) {
+        pdfjsLib = lib;
+        console.log('[PDFIndexer] PDF.js library set');
+    }
 
     /**
      * Initialize the indexer with a FlexSearch index.
@@ -66,9 +80,9 @@ export class PDFIndexer {
     }
 
     /**
-     * Load index from localStorage.
+     * Load index from localStorage (non-blocking, processes in chunks).
      */
-    public loadFromStorage(): void {
+    public async loadFromStorage(): Promise<void> {
         console.log('[PDF Search] Loading index from localStorage');
         try {
             const storedData = localStorage.getItem(this.STORAGE_KEY);
@@ -78,27 +92,68 @@ export class PDFIndexer {
                 const pages = JSON.parse(storedData) as IndexedPage[];
                 const metadata = JSON.parse(storedMetadata) as PDFMetadata[];
 
-                console.log(`[PDF Search] Found ${pages.length} pages in storage`);
-                console.log(`[PDF Search] Found ${metadata.length} PDFs in storage`);
+                console.log(
+                    `[PDF Search] Found ${pages.length} pages in storage`
+                );
+                console.log(
+                    `[PDF Search] Found ${metadata.length} PDFs in storage`
+                );
 
                 this.indexedPages.clear();
                 this.pdfMetadata.clear();
 
-                for (const page of pages) {
-                    this.indexedPages.set(page.id, page);
-                    this.searchIndex?.add(page.id, page.text);
-                }
-
+                // Load metadata immediately (small)
                 for (const meta of metadata) {
                     this.pdfMetadata.set(meta.url, meta);
                 }
 
-                console.log('[PDF Search] Index loaded successfully');
+                console.log('[PDF Search] ✅ Metadata loaded');
+                // Update UI with tags/courses available
+                this.onIndexUpdate?.();
+
+                // Load pages in chunks to avoid blocking UI
+                const CHUNK_SIZE = 200;
+                const totalPages = pages.length;
+
+                console.log(
+                    `[PDF Search] Loading ${totalPages} pages in chunks of ${CHUNK_SIZE}...`
+                );
+
+                for (let i = 0; i < totalPages; i += CHUNK_SIZE) {
+                    const chunk = pages.slice(
+                        i,
+                        Math.min(i + CHUNK_SIZE, totalPages)
+                    );
+
+                    for (const page of chunk) {
+                        this.indexedPages.set(page.id, page);
+                        this.searchIndex?.add(page.id, page.text);
+                    }
+
+                    // Log progress
+                    const loaded = Math.min(i + CHUNK_SIZE, totalPages);
+                    if (loaded % 500 === 0 || loaded === totalPages) {
+                        console.log(
+                            `[PDF Search] Loaded ${loaded}/${totalPages} pages`
+                        );
+                    }
+
+                    // Update UI after each chunk
+                    this.onIndexUpdate?.();
+
+                    // Yield to browser to prevent freezing
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+
+                console.log('[PDF Search] ✅ Index loaded successfully');
             } else {
                 console.log('[PDF Search] No stored index found');
             }
         } catch (error) {
-            console.error('[PDF Search] Error loading index from storage:', error);
+            console.error(
+                '[PDF Search] Error loading index from storage:',
+                error
+            );
         }
     }
 
@@ -146,10 +201,16 @@ export class PDFIndexer {
                 `[PDF Search] Index saved (approx ${(totalSize / 1024).toFixed(2)} KB)`
             );
         } catch (error) {
-            if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+            if (
+                error instanceof DOMException &&
+                error.name === 'QuotaExceededError'
+            ) {
                 console.error('[PDF Search] localStorage quota exceeded!');
             } else {
-                console.error('[PDF Search] Error saving index to storage:', error);
+                console.error(
+                    '[PDF Search] Error saving index to storage:',
+                    error
+                );
             }
         }
     }
@@ -164,7 +225,7 @@ export class PDFIndexer {
         localStorage.removeItem(this.STORAGE_KEY);
         localStorage.removeItem(this.METADATA_KEY);
         console.log('[PDF Search] Index cleared');
-        
+
         // Notify that index was updated
         this.onIndexUpdate?.();
     }
@@ -174,8 +235,22 @@ export class PDFIndexer {
      * @param pdfUrl - URL of the PDF to index
      * @param tags - Tags to associate with this PDF (e.g., course names)
      */
-    public async indexPDF(pdfUrl: string, tags: CourseTag[] = []): Promise<void> {
-        console.log(`[PDF Search] Starting to index PDF: ${pdfUrl} with tags:`, tags);
+    public async indexPDF(
+        pdfUrl: string,
+        tags: CourseTag[] = []
+    ): Promise<void> {
+        console.log(
+            `[PDF Search] Starting to index PDF: ${pdfUrl} with tags:`,
+            tags
+        );
+
+        // Check if PDF.js is loaded
+        if (!pdfjsLib) {
+            console.warn(
+                '[PDF Search] PDF.js not loaded yet, cannot index PDF'
+            );
+            throw new Error('PDF.js not loaded');
+        }
 
         // Skip if already indexed
         if (this.pdfMetadata.has(pdfUrl)) {
@@ -190,15 +265,24 @@ export class PDFIndexer {
 
         try {
             console.log(`[PDF Search] Fetching PDF from ${pdfUrl}`);
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
             loadingTask = pdfjsLib.getDocument({ url: pdfUrl });
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             pdf = await loadingTask.promise;
 
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             console.log(`[PDF Search] PDF loaded, ${pdf.numPages} pages`);
 
             // Skip PDFs with too many pages to prevent memory issues
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             if (pdf.numPages > 100) {
-                console.warn(`[PDF Search] Skipping PDF with ${pdf.numPages} pages (limit: 100)`);
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                console.warn(
+                    `[PDF Search] Skipping PDF with ${pdf.numPages} pages (limit: 100)`
+                );
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
                 await pdf.cleanup();
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
                 await pdf.destroy();
 
                 if (loadingTask) {
@@ -221,7 +305,9 @@ export class PDFIndexer {
 
             // Index each page
             for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-                console.log(`[PDF Search] Processing page ${pageNum}/${pdf.numPages}`);
+                console.log(
+                    `[PDF Search] Processing page ${pageNum}/${pdf.numPages}`
+                );
 
                 const page = await pdf.getPage(pageNum);
                 const textContent = await page.getTextContent();
@@ -270,31 +356,39 @@ export class PDFIndexer {
             this.saveToStorage();
 
             if (!this.isCrawling) {
-                alert(`PDF indexed successfully!\n${pdf.numPages} pages processed.`);
+                alert(
+                    `PDF indexed successfully!\n${pdf.numPages} pages processed.`
+                );
             }
-            
+
             // Notify that index was updated
             this.onIndexUpdate?.();
         } catch (error) {
             console.error('[PDF Search] Error indexing PDF:', error);
-            
+
             // Clean up on error too
             if (pdf) {
                 try {
                     await pdf.cleanup();
                     await pdf.destroy();
                 } catch (cleanupError) {
-                    console.error('[PDF Search] Error during cleanup:', cleanupError);
+                    console.error(
+                        '[PDF Search] Error during cleanup:',
+                        cleanupError
+                    );
                 }
             }
             if (loadingTask) {
                 try {
                     void loadingTask.destroy();
                 } catch (destroyError) {
-                    console.error('[PDF Search] Error destroying loading task:', destroyError);
+                    console.error(
+                        '[PDF Search] Error destroying loading task:',
+                        destroyError
+                    );
                 }
             }
-            
+
             if (!this.isCrawling) {
                 alert(`Error indexing PDF: ${String(error)}`);
             }
