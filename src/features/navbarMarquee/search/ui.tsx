@@ -45,8 +45,13 @@ export class SearchUI {
      */
     private togglePanel(show: boolean): void {
         if (!this.panel) return;
-        this.panel.style.display = show ? 'block' : 'none';
-        console.log(`[PDF Search] Panel ${show ? 'shown' : 'hidden'}`);
+        if (show) {
+            this.panel.classList.add('show');
+        } else {
+            this.panel.classList.remove('show');
+        }
+
+        console.log(`[PDF Search] Panel ${show ? 'hidden' : 'shown'}`);
     }
 
     /**
@@ -137,18 +142,7 @@ export class SearchUI {
 
         // Create search panel
         this.panel = (
-            <div
-                className="card position-absolute"
-                style={{
-                    top: '100%',
-                    right: '0',
-                    width: '400px',
-                    zIndex: '1000',
-                    display: 'none',
-                    marginTop: '0.5rem',
-                    color: 'initial',
-                }}
-            >
+            <div className="dropdown-menu dropdown-menu-right" style="width: 400px;">
                 <div className="card-body">
                     <h5 className="card-title">PDF Search</h5>
                     {this.resultsList.getElement()}
@@ -174,11 +168,6 @@ export class SearchUI {
         // Create main container
         this.container = (
             <div className="nav-item d-flex align-items-center ml-2 position-relative">
-                <i
-                    className="fa fa-search mr-2"
-                    aria-hidden="true"
-                    style={{ fontSize: '1.2em' }}
-                ></i>
                 {this.searchInput.getElement()}
                 {this.panel}
             </div>

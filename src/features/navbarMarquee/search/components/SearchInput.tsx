@@ -6,7 +6,7 @@ import type { PDFIndexer } from '../indexing';
  * Search input component with autocomplete hint.
  */
 export class SearchInput {
-    private wrapper: HTMLDivElement;
+    private container: HTMLDivElement;
     private input: HTMLInputElement;
     private hint: HTMLSpanElement;
     private onSearch: (query: string) => void;
@@ -26,47 +26,78 @@ export class SearchInput {
         this.onSearch = onSearch;
         this.onFocus = onFocus;
 
-        // Create wrapper
-        this.wrapper = (
-            <div style={{ display: 'flex', position: 'relative', width: '200px' }} />
-        ) as HTMLDivElement;
-
-        // Create input
-        this.input = (
-            <input
-                type="text"
-                className="form-control form-control-sm"
-                placeholder="Search PDFs..."
+        // Create container with input-like styling
+        this.container = (
+            <div 
+                className="form-control form-control-sm p-0"
                 style={{
-                    position: 'absolute',
-                    width: '100%',
-                    zIndex: 2,
-                    backgroundColor: 'transparent'
+                    display: 'flex',
+                    alignItems: 'center',
+                    width: '200px',
+                    position: 'relative',
+                    overflow: 'hidden'
                 }}
             />
-        ) as HTMLInputElement;
+        ) as HTMLDivElement;
 
-        // Create hint
+        // Add search icon wrapper
+        const iconWrapper = (
+            <div data-region="navbar-icon" className="ml-2" style="background-color: white; z-index: 1000;">
+                <i 
+                    className="icon fa fa-search" 
+                    title="Search"
+                    role="img"
+                    aria-label="Search"
+                />
+            </div>
+        );
+        this.container.appendChild(iconWrapper);
+
+        // Create text container (holds input + hint)
+        const textContainer = (
+            <div style={{ 
+                position: 'relative', 
+                flex: 1,
+                minWidth: 0,
+                display: 'flex',
+                alignItems: 'center'
+            }} />
+        ) as HTMLDivElement;
+
+        // Create hint (behind input)
         this.hint = (
             <span
                 style={{
                     position: 'absolute',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    left: '12px',
+                    left: 0,
                     color: '#999',
                     pointerEvents: 'none',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    fontSize: 'inherit',
-                    fontFamily: 'inherit',
-                    zIndex: 1
+                    whiteSpace: 'pre',
+                    userSelect: 'none'
                 }}
             />
         ) as HTMLSpanElement;
 
-        this.wrapper.appendChild(this.hint);
-        this.wrapper.appendChild(this.input);
+        // Create input (transparent background, no border)
+        this.input = (
+            <input
+                type="text"
+                placeholder="Search..."
+                style={{
+                    border: 'none',
+                    outline: 'none',
+                    background: 'transparent',
+                    padding: 0,
+                    margin: 0,
+                    width: '100%',
+                    zIndex: 10
+                }}
+            />
+        ) as HTMLInputElement;
+
+        textContainer.appendChild(this.hint);
+        textContainer.appendChild(this.input);
+        this.container.appendChild(textContainer);
 
         this.attachEventListeners();
     }
@@ -74,32 +105,40 @@ export class SearchInput {
     private attachEventListeners(): void {
         this.input.addEventListener('focus', () => this.onFocus());
         
-        this.input.addEventListener('input', e => {
-            const query = (e.target as HTMLInputElement).value;
-            
-            // Update hint position based on input text width
-            const tempSpan = document.createElement('span');
-            tempSpan.style.visibility = 'hidden';
-            tempSpan.style.position = 'absolute';
-            tempSpan.style.font = window.getComputedStyle(this.input).font;
-            tempSpan.textContent = query;
-            document.body.appendChild(tempSpan);
-            const textWidth = tempSpan.offsetWidth;
-            document.body.removeChild(tempSpan);
-            
-            this.hint.style.left = `${12 + textWidth}px`;
-            
+        this.input.addEventListener('input', () => {
+            const query = this.input.value;
             this.updateHint(query);
             this.onSearch(query);
         });
+
+        this.input.addEventListener('scroll', () => {
+            // Sync hint scroll with input scroll
+            this.hint.style.transform = `translateX(-${this.input.scrollLeft}px)`;
+        });
         
-        // Accept hint on Tab key
+        // Accept hint on Tab or Right Arrow at end of input
         this.input.addEventListener('keydown', e => {
-            if (e.key === 'Tab' && this.hint.textContent) {
+            const atEnd = this.input.selectionStart === this.input.value.length;
+            
+            if ((e.key === 'Tab' || (e.key === 'ArrowRight' && atEnd)) && this.hint.textContent) {
                 e.preventDefault();
-                this.input.value = this.input.value + this.hint.textContent;
+                const currentValue = this.input.value;
+                const completion = this.hint.textContent.substring(currentValue.length);
+                this.input.value = currentValue + completion;
+                this.updateHint(this.input.value);
                 this.onSearch(this.input.value);
             }
+        });
+
+        // Add focus styling to container
+        this.input.addEventListener('focus', () => {
+            this.container.style.borderColor = '#80bdff';
+            this.container.style.boxShadow = '0 0 0 0.2rem rgba(0, 123, 255, 0.25)';
+        });
+
+        this.input.addEventListener('blur', () => {
+            this.container.style.borderColor = '';
+            this.container.style.boxShadow = '';
         });
     }
 
@@ -121,7 +160,10 @@ export class SearchInput {
 
         const indexedPages = this.indexer.getIndexedPages();
         const topResult = indexedPages.get(results[0]);
-        if (!topResult) return;
+        if (!topResult) {
+            this.hint.textContent = '';
+            return;
+        }
 
         const queryLower = query.toLowerCase();
         const resultText = topResult.text;
@@ -141,15 +183,18 @@ export class SearchInput {
         const nextWordMatch = /^(\S+)/.exec(afterMatch);
         if (nextWordMatch) {
             const completion = nextWordMatch[1];
-            // Show only the completion part that extends what user typed
-            this.hint.textContent = completion;
+            // Show query + completion (hint shows full text, input covers first part)
+            this.hint.textContent = query + completion;
+            
+            // Sync scroll position
+            this.hint.style.transform = `translateX(-${this.input.scrollLeft}px)`;
         } else {
             this.hint.textContent = '';
         }
     }
 
     public getElement(): HTMLDivElement {
-        return this.wrapper;
+        return this.container;
     }
 
     public getValue(): string {
