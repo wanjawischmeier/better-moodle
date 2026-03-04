@@ -7,6 +7,7 @@
 - [x] clear searchbar when clicked off
 - [x] move searchbar icon into search bar
 - [x] setting to ignore pdf's over n pages
+- [ ] switch to actually importing/exporting the FlexSearch index and not the raw data
 - [ ] Show query matching filters at top of search results
     - [ ] pressing enter applies that filter
     - [ ] Show active filters on top of dropdown, else "all"
@@ -15,6 +16,7 @@
     - [ ] Index html pages as well
     - [ ] show document type in search results
 - [ ] Add crawl progress bar
+- [ ] only load pdfjs when needed for crawling
 - [ ] Automatic crawling
     - [ ] Get list of courses from my courses dropdown cache (shortname and url)
     - [ ] build dict of files and place in cache
@@ -27,18 +29,27 @@
             - url
     - [ ] Build logic for index update: "Crawl all courses and detect changes, index new files, check for changes in existing ones (propably only for html) and delete removed ones from index"
     - [ ] Update index when loading the page and noticing last update more than 24 hours ago
-    - [ ] Automatically delete old pages when adding new ones to keep local storage usage below a cap
 
 ### For full release
 
 - [ ] Add course specific delete
+- [ ] Use indexedDB for index storage
+- [ ] Figure out a way for pdfjs type safety
+- [ ] Add popup asking wether pdf should be indexed if over n pages?
 - [ ] Esc to defocus
+- [ ] make crawling efficient with intermittant page reloads (so keep track of progress in storage)
 - [ ] Proper menu in settings
-    - [ ] Enable/Disable
+    - [ ] Enable/Disable needs to immediately show/hide bar
     - [ ] Ignore pdf over n Pages
 - [ ] Use i18n
+- [ ] clicking on search icon should also toggle search focus
+  - [ ] Search icon color on focus should be hover color
+- [ ] Revamp search dropdown
+  - [ ] Move clear option into settings
+  - [ ] Only show filters 
 - [ ] Figure out what's going on with tailwind?
 - [ ] Enter to open first search result
+- [ ] Automatically delete old pages when adding new ones to keep local storage usage below a cap
 
 ## Bugs
 
@@ -54,6 +65,7 @@
 ### For full release
 
 - [ ] Filter out invalid characters in search results
+- [ ] Add space to right of search bar
 - [ ] i18n not working for settings title/desc
 - [ ] Fix clicking elsewhere in navbar not always closing search dropdown
 - [ ] Syntax error for query "Bäume a)"

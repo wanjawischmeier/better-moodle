@@ -5,12 +5,18 @@ import { Index } from 'flexsearch';
 import { PDFIndexer } from './search/indexing';
 import { SearchEngine } from './search/search';
 import { SearchUI } from './search/ui';
+import type * as PDFJS from 'pdfjs-dist';
+
+declare global {
+  interface Window {
+    __BETTER_MOODLE_PDFJS__?: typeof PDFJS;
+  }
+}
 
 const enabled = new BooleanSetting('enabled', true).addAlias('general.search');
 
 // PDF.js will be loaded from CDN dynamically
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let pdfjsLib: any = null;
+let pdfjsLib: typeof PDFJS | null = null;
 let pdfjsLoaded = false;
 let pdfjsLoadPromise: Promise<void> | null = null;
 
@@ -89,12 +95,11 @@ const loadPdfJs = async (): Promise<void> => {
             });
 
             // Access PDF.js from unsafeWindow (page context) or window (fallback)
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
             const win =
                 typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
             pdfjsLib = (win as any).__BETTER_MOODLE_PDFJS__;
-
+            
             if (!pdfjsLib) {
                 console.error('[PDF Search] ❌ Module not found. Debug info:', {
                     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
@@ -103,6 +108,7 @@ const loadPdfJs = async (): Promise<void> => {
                     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
                     onUnsafeWindow:
                         typeof unsafeWindow !== 'undefined' ?
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
                             !!(unsafeWindow as any).__BETTER_MOODLE_PDFJS__
                         :   'N/A',
                 });
@@ -175,7 +181,8 @@ const onload = (): void => {
                 updateStats();
                 ui?.initializeFilters();
             });
-            // Don't load from storage yet - needs PDF.js
+            
+            void indexer.loadFromStorage();
         }
 
         if (!searchEngine && searchIndex && indexer) {
@@ -202,16 +209,15 @@ const onload = (): void => {
 
         // Load PDF.js from CDN in background
         console.log(
-            '[PDF Search] ⏰ Starting PDF.js load (4 sec delay for testing)'
+            '[PDF Search] ⏰ Starting PDF.js load'
         );
 
         void loadPdfJs()
             .then(() => {
                 console.log('[PDF Search] 🎉 PDF.js ready!');
                 // Now enable PDF functionality
-                if (indexer) {
+                if (indexer && pdfjsLib) {
                     indexer.setPdfJsLib(pdfjsLib);
-                    void indexer.loadFromStorage();
                 }
             })
             .catch(error => {

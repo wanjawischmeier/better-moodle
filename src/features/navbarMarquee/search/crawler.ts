@@ -158,7 +158,6 @@ const categorizeUrl = (url: string): 'crawl' | 'pdf' | 'ignore' => {
 
 /**
  * Fetch HTML content from a URL.
- *
  * @param url - The URL to fetch
  * @returns Parsed DOM document and final URL after redirects
  */

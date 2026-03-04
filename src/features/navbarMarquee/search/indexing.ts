@@ -1,12 +1,11 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 // PDF indexing logic
 import type { TextItem } from 'pdfjs-dist/types/src/display/api';
 import type { Index } from 'flexsearch';
 import type { CourseTag, IndexedPage, PDFMetadata } from './types';
+import type * as PDFJS from 'pdfjs-dist';
 
 // PDF.js will be provided dynamically from CDN
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let pdfjsLib: any = null;
+let pdfjsLib: typeof PDFJS | null = null;
 
 /**
  * PDF indexer class.
@@ -26,15 +25,13 @@ export class PDFIndexer {
      * Set PDF.js library (loaded from CDN).
      * @param lib - The PDF.js library
      */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    public setPdfJsLib(lib: any) {
+    public setPdfJsLib(lib: typeof PDFJS) {
         pdfjsLib = lib;
         console.log('[PDFIndexer] PDF.js library set');
     }
 
     /**
      * Initialize the indexer with a FlexSearch index.
-
      * @param index - The FlexSearch index instance
      */
     public setIndex(index: Index) {
@@ -265,24 +262,17 @@ export class PDFIndexer {
 
         try {
             console.log(`[PDF Search] Fetching PDF from ${pdfUrl}`);
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
             loadingTask = pdfjsLib.getDocument({ url: pdfUrl });
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             pdf = await loadingTask.promise;
 
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             console.log(`[PDF Search] PDF loaded, ${pdf.numPages} pages`);
 
             // Skip PDFs with too many pages to prevent memory issues
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             if (pdf.numPages > 100) {
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 console.warn(
                     `[PDF Search] Skipping PDF with ${pdf.numPages} pages (limit: 100)`
                 );
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
                 await pdf.cleanup();
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
                 await pdf.destroy();
 
                 if (loadingTask) {
