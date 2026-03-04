@@ -12,7 +12,8 @@
         "semesterzeiten",
         "bookmarks",
         "weather",
-        "nina"
+        "nina",
+        "partials"
     ],
     "defaultDisabled": ["general.cauNavbar", "semesterzeiten", "speiseplan"],
     "enabledFrom": { "405": ["courses.sectionCourseIndex"] },
