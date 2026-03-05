@@ -1,14 +1,4 @@
 import { PartialFragment } from './Partial';
-import {
-    activateIframe,
-    attachHeightSync,
-    getCached,
-    getOrCreateCache,
-    isCached,
-    normaliseUrl,
-    removeUncachedIframes,
-    storeCached,
-} from './partialCache';
 
 const LOG = '[better-moodle/partials]';
 
@@ -232,9 +222,6 @@ const isolateIframe = (
  * Only one swap per selector can be in flight at a time. If a second call
  * arrives while the first is still loading, the first is cancelled and its
  * overlay/iframe are removed before the new one starts.
- *
- * Subsequent calls for already-cached URLs are instant — the existing iframe
- * is revealed immediately without a network request.
  * @param partial      - the partial that matched the navigation
  * @param targetUrl    - the URL the user is navigating to
  * @param pushHistory  - whether to push a new history entry (false when
@@ -246,8 +233,6 @@ export const applyPartial = async (
     targetUrl: string,
     pushHistory = true,
 ): Promise<void> => {
-    const normUrl = normaliseUrl(targetUrl);
-
     console.log(
         `${LOG} Applying partial "${partial.selector}":`,
         window.top!.location.href,
@@ -263,38 +248,34 @@ export const applyPartial = async (
     }
 
     const currentHeight = current.scrollHeight;
-    const entry = getOrCreateCache(partial, current);
-    const { wrapper } = entry;
 
-    // --- Cache hit: show existing iframe immediately ---
-    if (isCached(partial.selector, normUrl)) {
-        console.log(`${LOG} Cache hit for "${normUrl}" — showing instantly.`);
-        // Cancel any in-flight swap (no async work needed here).
-        inFlight.get(partial.selector)?.cancel();
-        inFlight.get(partial.selector)?.cleanup();
-        inFlight.delete(partial.selector);
+    // --- Build the loading wrapper ---
+    // Structure (back to front):
+    //   <div wrapper>       ← replaces current in the DOM, preserves height
+    //     <iframe/>         ← loads the target page
+    //     <div barrier/>    ← white overlay while loading
+    //     <div spinner/>    ← spinner on top
+    //   </div>
+    const wrapper = document.createElement('div');
+    wrapper.id = current.id;
+    wrapper.className = current.className;
+    wrapper.style.cssText = `position:relative;width:100%;min-height:${currentHeight}px;`;
 
-        const cached = getCached(partial.selector, normUrl)!;
-        activateIframe(entry, normUrl);
-        attachHeightSync(entry, cached.iframe, cached.partialEl);
-        if (pushHistory) window.top!.history.pushState(null, '', targetUrl);
-        return;
-    }
-
-    // --- Cache miss: load in a new iframe ---
-    // Build the overlay first so the iframe loads beneath it.
     const { barrier, spinnerWrapper } = addLoadingOverlay(wrapper, currentHeight);
 
     // Declare iframe here so the cleanup closure can reference it before
-    // the createAndLoadIframe call resolves.
+    // createAndLoadIframe resolves.
     let inFlightIframe: HTMLIFrameElement | null = null;
 
     const isCancelled = registerInFlight(partial.selector, () => {
-        barrier.remove();
-        spinnerWrapper.remove();
+        wrapper.remove();
         inFlightIframe?.remove();
         inFlightIframe = null;
     });
+
+    current.replaceWith(wrapper);
+    // Scroll to show the spinner immediately.
+    wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     console.log(`${LOG} Loading "${targetUrl}" in new iframe…`);
     const iframe = await createAndLoadIframe(wrapper, barrier, targetUrl, currentHeight);
@@ -308,8 +289,7 @@ export const applyPartial = async (
 
     if (!iframe) {
         console.error(`${LOG} iframe failed to load – falling back.`);
-        barrier.remove();
-        spinnerWrapper.remove();
+        wrapper.replaceWith(current);
         clearInFlight(partial.selector);
         window.top!.location.href = targetUrl;
         return;
@@ -327,9 +307,7 @@ export const applyPartial = async (
     const iframeDoc = iframe.contentDocument;
     if (!iframeDoc) {
         console.warn(`${LOG} iframe contentDocument unavailable – falling back.`);
-        barrier.remove();
-        spinnerWrapper.remove();
-        iframe.remove();
+        wrapper.replaceWith(current);
         clearInFlight(partial.selector);
         window.top!.location.href = targetUrl;
         return;
@@ -338,25 +316,23 @@ export const applyPartial = async (
     const partialEl = isolateIframe(iframeDoc, partial.selector);
     if (!partialEl) {
         console.warn(`${LOG} Selector "${partial.selector}" not found in iframe – falling back.`);
-        barrier.remove();
-        spinnerWrapper.remove();
-        iframe.remove();
+        wrapper.replaceWith(current);
         clearInFlight(partial.selector);
         window.top!.location.href = targetUrl;
         return;
     }
 
-    // --- Store, activate, finalise ---
-    storeCached(partial.selector, normUrl, { iframe, partialEl });
-    activateIframe(entry, normUrl);
-    removeUncachedIframes(entry, iframe);
-
+    // --- Finalise ---
     iframe.style.position = 'static';
     iframe.style.visibility = 'visible';
-    attachHeightSync(entry, iframe, partialEl);
     wrapper.style.minHeight = '';
     wrapper.style.margin = '0';
     wrapper.style.padding = '0';
+
+    /** Syncs the wrapper/iframe height to the partial element's scrollHeight. */
+    const syncHeight = () => { iframe.style.height = `${partialEl.scrollHeight}px`; };
+    syncHeight();
+    new ResizeObserver(syncHeight).observe(partialEl);
 
     clearInFlight(partial.selector);
     if (pushHistory) window.top!.history.pushState(null, '', targetUrl);

@@ -9,12 +9,13 @@
 - [ ] Fix bettermoodle action buttons
 - [ ] Test interactive iframe elements
 - [x] Fix header selection
-  - [ ] Dont update on navigate back
+  - [ ] Doesnt update on navigate back
 - [x] Hierarchical partials
 - [x] Caching on/off
 - [ ] id-specific selectors
 - [ ] Bug: sometimes triggers swap with href='#'
 - [ ] Bug: Iframe height not always updating
+- [ ] Bug: only include border styles in nav bar active
 - [ ] Redirect on main window if link in iframe doesnt match any partial
 
 ## Final
