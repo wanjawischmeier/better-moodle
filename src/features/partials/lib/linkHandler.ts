@@ -11,8 +11,7 @@ const BORDER_PROPS = [
 
 /**
  * Active border styles captured once from the server-rendered active nav link.
- * Stored at module level so they survive across multiple partial swaps where
- * inline style mutations would otherwise corrupt the computed values.
+ * Stored at module level so they survive across multiple partial swaps
  */
 let capturedActiveBorderStyles: Partial<Record<string, string>> | null = null;
 
@@ -48,9 +47,6 @@ const findMatchingPartial = (
  * Builds the click handler for the given set of partials.
  * Intercepts same-context link clicks and delegates to partial-switching when
  * a matching partial exists; all other clicks are left to the browser.
- *
- * NOTE: This is intentionally split from the hover-based prefetch logic
- * (to be added later) so that both can be attached/detached independently.
  * @param partials - the list of registered partials to match against
  */
 const buildClickHandler =
@@ -62,8 +58,9 @@ const buildClickHandler =
             event.metaKey ||
             event.shiftKey ||
             event.button !== 0
-        )
+        ) {
             return;
+        }
 
         if (!(event.target instanceof Element)) return;
 
@@ -74,7 +71,7 @@ const buildClickHandler =
         if (link.target && link.target !== '_self') return;
 
         const href = link.href;
-        if (!href || href.startsWith('javascript:')) return;
+        if (!href || href.startsWith('javascript:') || href === '#') return;
 
         // Skip in-page anchor navigation (same origin, path and search — only hash differs).
         const targetParsed = new URL(href);
@@ -84,13 +81,6 @@ const buildClickHandler =
             targetParsed.pathname === topLocation.pathname &&
             targetParsed.search === topLocation.search
         ) {
-            return;
-        }
-
-        // Do nothing if already on target page - TODO doesnt work rn
-        if (targetParsed.href === topLocation.href) {
-            console.log('Already on target page!');
-            event.preventDefault();
             return;
         }
 
@@ -104,6 +94,7 @@ const buildClickHandler =
         }
 
         event.preventDefault();
+
         // Update URL and nav state immediately on click, before the swap loads.
         window.top!.history.pushState(null, '', href);
         updateNavActiveState(href);

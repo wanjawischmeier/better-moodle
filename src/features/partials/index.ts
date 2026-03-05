@@ -24,6 +24,7 @@ const partials: PartialFragment[] = [
         patternToRegex('MOODLE_URL/my/*'),
         patternToRegex('MOODLE_URL/course/'),
         patternToRegex('MOODLE_URL/course/view.php?id=*'),
+        patternToRegex('MOODLE_URL/course/section.php?id=*'),
         patternToRegex('MOODLE_URL/user/index.php?id=*'),
         patternToRegex('MOODLE_URL/grade/report/index.php?id=*'),
         patternToRegex('MOODLE_URL/message/*'),
@@ -31,6 +32,10 @@ const partials: PartialFragment[] = [
         patternToRegex('MOODLE_URL/user/files.php'),
         patternToRegex('MOODLE_URL/user/preferences.php'),
         patternToRegex('MOODLE_URL/reportbuilder/index.php'),
+        patternToRegex('MOODLE_URL/mod/forum/*'),
+        patternToRegex('MOODLE_URL/mod/quiz/*'),
+        patternToRegex('MOODLE_URL/mod/assign/*'),
+        patternToRegex('MOODLE_URL/mod/choicegroup/*'),
     ], {
         pinUrls: [
             patternToRegex('MOODLE_URL/my/'),
