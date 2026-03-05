@@ -9,12 +9,22 @@ const partials: PartialFragment[] = [
     new PartialFragment('#page-content', [
         patternToRegex('MOODLE_URL/course/view.php?id=*'),
         patternToRegex('MOODLE_URL/user/index.php?id=*'),
+        patternToRegex('MOODLE_URL/user/view.php?id=*&course=*'),
         patternToRegex('MOODLE_URL/grade/report/index.php?id=*'),
     ], {
         condition: (currentUrl: string, targetUrl: string) => {
-            const currentId = new URL(currentUrl).searchParams.get('id');
-            const targetId = new URL(targetUrl).searchParams.get('id');
-            return currentId !== null && currentId === targetId;
+            const currentUrlObj = new URL(currentUrl);
+            const targetUrlObj = new URL(targetUrl);
+            const currentId = currentUrlObj.searchParams.get('id');
+            const targetId = targetUrlObj.searchParams.get('id');
+            const currentCourse = currentUrlObj.searchParams.get('course');
+            const targetCourse = targetUrlObj.searchParams.get('course');
+
+            return currentId !== null && (
+                currentId === targetId ||
+                currentId === targetCourse ||
+                currentCourse === targetId
+            );
         },
     }),
 
@@ -23,10 +33,11 @@ const partials: PartialFragment[] = [
         patternToRegex('MOODLE_URL/my/'),
         patternToRegex('MOODLE_URL/my/*'),
         patternToRegex('MOODLE_URL/course/'),
-        patternToRegex('MOODLE_URL/course/view.php?id=*'),
-        patternToRegex('MOODLE_URL/course/section.php?id=*'),
-        patternToRegex('MOODLE_URL/user/index.php?id=*'),
-        patternToRegex('MOODLE_URL/grade/report/index.php?id=*'),
+        patternToRegex('MOODLE_URL/course/view.php?*'),
+        patternToRegex('MOODLE_URL/course/section.php?*'),
+        patternToRegex('MOODLE_URL/course/index.php?*'),
+        patternToRegex('MOODLE_URL/user/index.php?*'),
+        patternToRegex('MOODLE_URL/grade/report/index.php?*'),
         patternToRegex('MOODLE_URL/message/*'),
         patternToRegex('MOODLE_URL/calendar/*'),
         patternToRegex('MOODLE_URL/user/files.php'),

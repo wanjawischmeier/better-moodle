@@ -67,7 +67,7 @@ const addLoadingOverlay = (
 
     const barrier = document.createElement('div');
     barrier.style.cssText =
-        'position:absolute;inset:0;background:rgba(255,255,255,1);z-index:1;pointer-events:none;';
+        'position:absolute;inset:0;background:rgba(255,255,255,0.9999);z-index:1;pointer-events:none;';
 
     const spinnerWrapper = document.createElement('div');
     spinnerWrapper.style.cssText =
@@ -201,6 +201,13 @@ const isolateIframe = (
         node = parent;
     }
     iframeDoc.body.style.cssText = 'margin:0;padding:0;overflow:hidden;';
+
+    // Make all links that are not intercepted by the partial feature open in
+    // the top-level page instead of navigating the iframe itself.
+    // <base target="_top"> is the simplest way — no click listeners needed.
+    const base = iframeDoc.createElement('base');
+    base.target = '_top';
+    iframeDoc.head.appendChild(base);
 
     console.groupCollapsed(`${LOG} iframe body AFTER isolation`);
     Array.from(iframeDoc.body.children).forEach((child, i) => {
