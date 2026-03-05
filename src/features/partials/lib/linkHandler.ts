@@ -20,7 +20,7 @@ let capturedActiveBorderStyles: Partial<Record<string, string>> | null = null;
 const ensureBorderStylesCaptured = (): void => {
     if (capturedActiveBorderStyles) return;
     const active = document.querySelector<HTMLAnchorElement>(
-        'nav a.active:not(:has(img)), [role="menu"] a.active:not(:has(img)), [role="menubar"] a.active:not(:has(img)), [role="navigation"] a.active:not(:has(img))'
+        'nav li > a.active:not(:has(img)), [role="menu"] li > a.active:not(:has(img)), [role="menubar"] li > a.active:not(:has(img)), [role="navigation"] li > a.active:not(:has(img))'
     );
     if (!active) return;
     const cs = getComputedStyle(active);
@@ -127,7 +127,7 @@ const updateNavActiveState = (targetUrl: string): void => {
 
     const navLinks = Array.from(
         document.querySelectorAll<HTMLAnchorElement>(
-            'nav a[href], [role="menu"] a[href], [role="menubar"] a[href], [role="navigation"] a[href]'
+            'nav li > a[href], [role="menu"] li > a[href], [role="menubar"] li > a[href], [role="navigation"] li > a[href]'
         )
     );
 

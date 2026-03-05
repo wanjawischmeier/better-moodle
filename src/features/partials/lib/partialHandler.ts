@@ -13,6 +13,52 @@ import {
 const LOG = '[better-moodle/partials]';
 
 // ---------------------------------------------------------------------------
+// In-flight cancellation
+// ---------------------------------------------------------------------------
+
+interface InFlightCleanup {
+    /** Marks the swap as cancelled so awaiting code exits early. */
+    cancel: () => void;
+    /** Removes the overlay + any not-yet-stored iframe from the wrapper. */
+    cleanup: () => void;
+}
+
+/** One entry per selector — only one swap can be in progress at a time. */
+const inFlight = new Map<string, InFlightCleanup>();
+
+/**
+ * Registers a new in-flight swap for `selector`, cancelling any previous one.
+ * Returns an `isCancelled` predicate the caller checks after every await.
+ * @param selector - CSS selector identifying the partial
+ * @param cleanup  - removes the overlay/iframe if this swap is superseded
+ * @returns a function that returns true once this swap has been superseded
+ */
+const registerInFlight = (
+    selector: string,
+    cleanup: () => void,
+): (() => boolean) => {
+    // Cancel and clean up any swap already running for this selector.
+    inFlight.get(selector)?.cancel();
+    inFlight.get(selector)?.cleanup();
+
+    let cancelled = false;
+    inFlight.set(selector, {
+        /** Marks this swap as superseded so in-progress awaits exit early. */
+        cancel: () => { cancelled = true; },
+        cleanup,
+    });
+    return () => cancelled;
+};
+
+/**
+ * Removes the in-flight record once a swap has finished successfully.
+ * @param selector - the CSS selector whose in-flight record to clear
+ */
+const clearInFlight = (selector: string): void => {
+    inFlight.delete(selector);
+};
+
+// ---------------------------------------------------------------------------
 // Loading overlay
 // ---------------------------------------------------------------------------
 
@@ -183,6 +229,10 @@ const isolateIframe = (
  * Applies a partial swap, loading `targetUrl` in an iframe and isolating the
  * element matching `partial.selector`.
  *
+ * Only one swap per selector can be in flight at a time. If a second call
+ * arrives while the first is still loading, the first is cancelled and its
+ * overlay/iframe are removed before the new one starts.
+ *
  * Subsequent calls for already-cached URLs are instant — the existing iframe
  * is revealed immediately without a network request.
  * @param partial      - the partial that matched the navigation
@@ -219,6 +269,11 @@ export const applyPartial = async (
     // --- Cache hit: show existing iframe immediately ---
     if (isCached(partial.selector, normUrl)) {
         console.log(`${LOG} Cache hit for "${normUrl}" — showing instantly.`);
+        // Cancel any in-flight swap (no async work needed here).
+        inFlight.get(partial.selector)?.cancel();
+        inFlight.get(partial.selector)?.cleanup();
+        inFlight.delete(partial.selector);
+
         const cached = getCached(partial.selector, normUrl)!;
         activateIframe(entry, normUrl);
         attachHeightSync(entry, cached.iframe, cached.partialEl);
@@ -227,15 +282,35 @@ export const applyPartial = async (
     }
 
     // --- Cache miss: load in a new iframe ---
+    // Build the overlay first so the iframe loads beneath it.
     const { barrier, spinnerWrapper } = addLoadingOverlay(wrapper, currentHeight);
+
+    // Declare iframe here so the cleanup closure can reference it before
+    // the createAndLoadIframe call resolves.
+    let inFlightIframe: HTMLIFrameElement | null = null;
+
+    const isCancelled = registerInFlight(partial.selector, () => {
+        barrier.remove();
+        spinnerWrapper.remove();
+        inFlightIframe?.remove();
+        inFlightIframe = null;
+    });
 
     console.log(`${LOG} Loading "${targetUrl}" in new iframe…`);
     const iframe = await createAndLoadIframe(wrapper, barrier, targetUrl, currentHeight);
+    inFlightIframe = iframe;
+
+    if (isCancelled()) {
+        console.log(`${LOG} Swap to "${targetUrl}" was superseded – aborting.`);
+        iframe?.remove();
+        return;
+    }
 
     if (!iframe) {
         console.error(`${LOG} iframe failed to load – falling back.`);
         barrier.remove();
         spinnerWrapper.remove();
+        clearInFlight(partial.selector);
         window.top!.location.href = targetUrl;
         return;
     }
@@ -244,12 +319,18 @@ export const applyPartial = async (
     await waitForIframeStable(iframe);
     console.log(`${LOG} iframe DOM stable, proceeding with isolation.`);
 
+    if (isCancelled()) {
+        console.log(`${LOG} Swap to "${targetUrl}" was superseded after stabilisation – aborting.`);
+        return;
+    }
+
     const iframeDoc = iframe.contentDocument;
     if (!iframeDoc) {
         console.warn(`${LOG} iframe contentDocument unavailable – falling back.`);
         barrier.remove();
         spinnerWrapper.remove();
         iframe.remove();
+        clearInFlight(partial.selector);
         window.top!.location.href = targetUrl;
         return;
     }
@@ -260,6 +341,7 @@ export const applyPartial = async (
         barrier.remove();
         spinnerWrapper.remove();
         iframe.remove();
+        clearInFlight(partial.selector);
         window.top!.location.href = targetUrl;
         return;
     }
@@ -267,8 +349,6 @@ export const applyPartial = async (
     // --- Store, activate, finalise ---
     storeCached(partial.selector, normUrl, { iframe, partialEl });
     activateIframe(entry, normUrl);
-    // Remove any iframes left over from previous swaps that weren't stored in
-    // the cache (e.g. when caching is disabled).
     removeUncachedIframes(entry, iframe);
 
     iframe.style.position = 'static';
@@ -278,6 +358,7 @@ export const applyPartial = async (
     wrapper.style.margin = '0';
     wrapper.style.padding = '0';
 
+    clearInFlight(partial.selector);
     if (pushHistory) window.top!.history.pushState(null, '', targetUrl);
     fadeOutOverlay(barrier, spinnerWrapper);
 

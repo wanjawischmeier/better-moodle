@@ -11,6 +11,7 @@
 - [ ] Fix header selection
 - [x] Hierarchical partials
 - [x] Caching on/off
+- [ ] id-specific selectors
 
 ## Final
 - [ ] Adress circular back navigation
