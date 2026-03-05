@@ -1,4 +1,4 @@
-import { Partial } from './Partial';
+import { PartialFragment } from './Partial';
 import { applyPartial } from './partialHandler';
 
 /**
@@ -9,10 +9,10 @@ import { applyPartial } from './partialHandler';
  * @param targetUrl  - the URL the user is trying to navigate to
  */
 const findMatchingPartial = (
-    partials: Partial[],
+    partials: PartialFragment[],
     currentUrl: string,
     targetUrl: string
-): Partial | undefined =>
+): PartialFragment | undefined =>
     partials.find(p => p.matches(currentUrl) && p.matches(targetUrl));
 
 /**
@@ -25,7 +25,7 @@ const findMatchingPartial = (
  * @param partials - the list of registered partials to match against
  */
 const buildClickHandler =
-    (partials: Partial[]) =>
+    (partials: PartialFragment[]) =>
     (event: MouseEvent): void => {
         // Let the browser handle new-tab intents (Ctrl / Meta / middle-click).
         if (
@@ -49,22 +49,23 @@ const buildClickHandler =
 
         // Skip in-page anchor navigation (same origin, path and search — only hash differs).
         const targetParsed = new URL(href);
+        const topLocation = window.top!.location;
         if (
-            targetParsed.origin === window.location.origin &&
-            targetParsed.pathname === window.location.pathname &&
-            targetParsed.search === window.location.search
+            targetParsed.origin === topLocation.origin &&
+            targetParsed.pathname === topLocation.pathname &&
+            targetParsed.search === topLocation.search
         ) {
             return;
         }
-        
+
         // Do nothing if already on target page - TODO doesnt work rn
-        if (targetParsed.href === window.location.href) {
+        if (targetParsed.href === topLocation.href) {
             console.log('Already on target page!');
             event.preventDefault();
             return;
         }
 
-        const partial = findMatchingPartial(partials, window.location.href, href);
+        const partial = findMatchingPartial(partials, topLocation.href, href);
         if (!partial) {
             console.log(
                 '[better-moodle/partials] Link click not intercepted (no matching partial):',
@@ -120,7 +121,7 @@ let clickHandler: ((event: MouseEvent) => void) | null = null;
  * Attaches the click interception listener for the given partials.
  * @param partials - the list of registered partials
  */
-export const attach = (partials: Partial[]): void => {
+export const attach = (partials: PartialFragment[]): void => {
     if (clickHandler) return;
     clickHandler = buildClickHandler(partials);
     document.addEventListener('click', clickHandler);

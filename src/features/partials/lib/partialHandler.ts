@@ -1,4 +1,4 @@
-import { Partial } from './Partial';
+import { PartialFragment } from './Partial';
 import {
     activateIframe,
     attachHeightSync,
@@ -34,7 +34,7 @@ const addLoadingOverlay = (
 
     const spinnerWrapper = document.createElement('div');
     spinnerWrapper.style.cssText =
-        'position:absolute;top:4rem;left:0;right:0;display:flex;' +
+        'position:absolute;left:0;right:0;display:flex;transform:translateY(4rem);' +
         'justify-content:center;z-index:2;pointer-events:none;';
     const spinnerEl = document.createElement('div');
     spinnerEl.className = 'spinner-border text-primary';
@@ -191,7 +191,7 @@ const isolateIframe = (
  *                       already correct)
  */
 export const applyPartial = async (
-    partial: Partial,
+    partial: PartialFragment,
     targetUrl: string,
     pushHistory = true,
 ): Promise<void> => {
@@ -199,7 +199,7 @@ export const applyPartial = async (
 
     console.log(
         `${LOG} Applying partial "${partial.selector}":`,
-        window.location.href,
+        window.top!.location.href,
         '->',
         targetUrl,
     );
@@ -207,12 +207,12 @@ export const applyPartial = async (
     const current = document.querySelector<HTMLElement>(partial.selector);
     if (!current) {
         console.warn(`${LOG} Selector "${partial.selector}" not found – falling back.`);
-        window.location.href = targetUrl;
+        window.top!.location.href = targetUrl;
         return;
     }
 
     const currentHeight = current.scrollHeight;
-    const entry = getOrCreateCache(partial.selector, current);
+    const entry = getOrCreateCache(partial, current);
     const { wrapper } = entry;
 
     // --- Cache hit: show existing iframe immediately ---
@@ -221,7 +221,7 @@ export const applyPartial = async (
         const cached = getCached(partial.selector, normUrl)!;
         activateIframe(entry, normUrl);
         attachHeightSync(entry, cached.iframe, cached.partialEl);
-        if (pushHistory) window.history.pushState(null, '', targetUrl);
+        if (pushHistory) window.top!.history.pushState(null, '', targetUrl);
         return;
     }
 
@@ -238,7 +238,7 @@ export const applyPartial = async (
         console.error(`${LOG} iframe failed to load – falling back.`);
         barrier.remove();
         spinnerWrapper.remove();
-        window.location.href = targetUrl;
+        window.top!.location.href = targetUrl;
         return;
     }
 
@@ -252,7 +252,7 @@ export const applyPartial = async (
         barrier.remove();
         spinnerWrapper.remove();
         iframe.remove();
-        window.location.href = targetUrl;
+        window.top!.location.href = targetUrl;
         return;
     }
 
@@ -262,7 +262,7 @@ export const applyPartial = async (
         barrier.remove();
         spinnerWrapper.remove();
         iframe.remove();
-        window.location.href = targetUrl;
+        window.top!.location.href = targetUrl;
         return;
     }
 
@@ -277,7 +277,7 @@ export const applyPartial = async (
     wrapper.style.margin = '0';
     wrapper.style.padding = '0';
 
-    if (pushHistory) window.history.pushState(null, '', targetUrl);
+    if (pushHistory) window.top!.history.pushState(null, '', targetUrl);
     fadeOutOverlay(barrier, spinnerWrapper);
 
     console.log(`${LOG} Partial "${partial.selector}" applied successfully.`);

@@ -9,13 +9,46 @@ export const patternToRegex = (pattern: string): RegExp => {
     // Substitute the placeholder before escaping, so the URL's own special
     // regex chars (dots, etc.) get escaped as part of the literal portion.
     const withUrl = pattern.replace('MOODLE_URL', __MOODLE_URL__);
+    // Strip a trailing slash from the pattern's path so that
+    // `MOODLE_URL/my/` and `MOODLE_URL/my` are treated as identical.
+    const normalised = withUrl.replace(/\/(\?|#|$)/, '$1').replace(/\/$/, '');
     // Escape all regex metacharacters except `*` (which we handle next).
-    const escaped = withUrl.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+    const escaped = normalised.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
     // Replace `*` with a wildcard that stops at query-string / fragment boundaries.
     const withWildcard = escaped.replace(/\*/g, '[^?#]*');
-    // Anchor to the start; allow the match to end at `/`, `?`, `#`, or string end.
-    return new RegExp(`^${withWildcard}(/|\\?|#|$)`);
+    // Anchor to the start; allow an optional trailing slash then end/query/hash.
+    return new RegExp(`^${withWildcard}/?(?:\\?|#|$)`);
 };
+
+/** Strips a trailing slash from the path portion of a URL. */
+const stripTrailingSlash = (url: string): string => {
+    try {
+        const u = new URL(url);
+        u.pathname = u.pathname.replace(/\/$/, '') || '/';
+        return u.href;
+    } catch {
+        return url.replace(/\/(?=\?|#|$)/, '');
+    }
+};
+
+
+/**
+ * Options controlling caching behaviour for a {@link PartialFragment}.
+ */
+export interface PartialCacheOptions {
+    /**
+     * Maximum number of iframes to keep in the cache for this partial.
+     * When the limit is reached the oldest non-pinned entry is evicted.
+     * @default 5
+     */
+    cacheSize?: number;
+    /**
+     * URL patterns whose iframes are never evicted from the cache (they still
+     * count towards `cacheSize`).  Use the same `MOODLE_URL/*` syntax as the
+     * navigation URL list.
+     */
+    pinUrls?: RegExp[];
+}
 
 /**
  * A partial represents a fragment of a page identified by a CSS selector.
@@ -23,15 +56,21 @@ export const patternToRegex = (pattern: string): RegExp => {
  * intercepted and handled by the partial-switching logic instead of a full
  * page reload.
  */
-export class Partial {
+export class PartialFragment {
     /** CSS selector for the element that this partial controls */
     readonly selector: string;
     /** URL patterns that this partial is active for */
     readonly urls: RegExp[];
+    /** Maximum number of iframes kept in the cache for this partial. */
+    readonly cacheSize: number;
+    /** URL patterns whose cached iframes are never evicted. */
+    readonly pinUrls: RegExp[];
 
-    constructor(selector: string, urls: RegExp[]) {
+    constructor(selector: string, urls: RegExp[], options: PartialCacheOptions = {}) {
         this.selector = selector;
         this.urls = urls;
+        this.cacheSize = options.cacheSize ?? 5;
+        this.pinUrls = options.pinUrls ?? [];
     }
 
     /**
@@ -39,6 +78,14 @@ export class Partial {
      * @param url - the URL to test
      */
     matches(url: string): boolean {
-        return this.urls.some(pattern => pattern.test(url));
+        return this.urls.some(pattern => pattern.test(stripTrailingSlash(url)));
+    }
+
+    /**
+     * Returns true if the given URL should be pinned in the cache.
+     * @param url - the URL to test
+     */
+    isPinned(url: string): boolean {
+        return this.pinUrls.some(pattern => pattern.test(stripTrailingSlash(url)));
     }
 }
