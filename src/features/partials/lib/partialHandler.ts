@@ -227,9 +227,6 @@ export const applyPartial = async (
     }
 
     // --- Cache miss: load in a new iframe ---
-    // Scroll to the top of the wrapper so the spinner is always in view.
-    wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
     const { barrier, spinnerWrapper } = addLoadingOverlay(wrapper, currentHeight);
 
     console.log(`${LOG} Loading "${targetUrl}" in new iframe…`);
