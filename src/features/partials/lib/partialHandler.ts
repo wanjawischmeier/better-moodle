@@ -189,7 +189,12 @@ const isolateIframe = (
             const keep = node;
             const before = parent.children.length;
             Array.from(parent.children).forEach(child => {
-                if (child !== keep) child.remove();
+                // Keep the target subtree and any drawer elements — drawers are
+                // siblings of the partial in the DOM and Moodle's JS requires
+                // them to be present to initialise correctly.
+                if (child !== keep && !child.classList.contains('drawer')) {
+                    child.remove();
+                }
             });
             console.log(
                 `${LOG} Removed ${before - 1} sibling(s) from`,
