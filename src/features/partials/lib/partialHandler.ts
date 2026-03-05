@@ -65,15 +65,17 @@ const addLoadingOverlay = (
 ): { barrier: HTMLDivElement; spinnerWrapper: HTMLDivElement } => {
     wrapper.style.minHeight = `${minHeight}px`;
 
-    const barrier = document.createElement('div');
+    const ownerDoc = wrapper.ownerDocument;
+
+    const barrier = ownerDoc.createElement('div');
     barrier.style.cssText =
         'position:absolute;inset:0;background:rgba(255,255,255,0.9999);z-index:1;pointer-events:none;';
 
-    const spinnerWrapper = document.createElement('div');
+    const spinnerWrapper = ownerDoc.createElement('div');
     spinnerWrapper.style.cssText =
         'position:absolute;left:0;right:0;display:flex;transform:translateY(4rem);' +
         'justify-content:center;z-index:2;pointer-events:none;';
-    const spinnerEl = document.createElement('div');
+    const spinnerEl = ownerDoc.createElement('div');
     spinnerEl.className = 'spinner-border text-primary';
     spinnerEl.setAttribute('role', 'status');
     spinnerWrapper.appendChild(spinnerEl);
@@ -124,7 +126,7 @@ const createAndLoadIframe = async (
     targetUrl: string,
     height: number,
 ): Promise<HTMLIFrameElement | null> => {
-    const iframe = document.createElement('iframe');
+    const iframe = wrapper.ownerDocument.createElement('iframe');
     iframe.style.cssText =
         'border:0;width:100%;display:block;overflow:hidden;' +
         `position:absolute;top:0;left:0;height:${height}px;z-index:0;`;
@@ -282,7 +284,9 @@ export const applyPartial = async (
         inFlightIframe = null;
     });
 
-    current.replaceWith(wrapper);
+    current.parentElement!.insertBefore(wrapper, current);
+    current.style.display = 'none';
+
     // Scroll the top-level page to the very top so the spinner is visible.
     window.top!.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -348,4 +352,5 @@ export const applyPartial = async (
     fadeOutOverlay(barrier, spinnerWrapper);
 
     console.log(`${LOG} Partial "${partial.selector}" applied successfully.`);
+    setTimeout(() => current.remove(), 1000);
 };

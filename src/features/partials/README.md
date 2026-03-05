@@ -18,6 +18,7 @@
 - [ ] Bug: only include border styles in nav bar active
 - [ ] Redirect on main window if link in iframe doesnt match any partial
 - [ ] Bug: Load hangs when going from Kurs -> Teilnehmer -> Kurs
+- [ ] TIMEOUT! for: Loading "..." in new iframe…
 
 ## Refactor
 - [ ] Move isolation ignore class list to central definition
