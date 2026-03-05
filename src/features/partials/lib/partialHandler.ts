@@ -1,71 +1,36 @@
 import { Partial } from './Partial';
+import {
+    activateIframe,
+    attachHeightSync,
+    getCached,
+    getOrCreateCache,
+    isCached,
+    normaliseUrl,
+    storeCached,
+} from './partialCache';
 
-/** Sentinel attribute placed on the loading wrapper so it can be found and
- *  replaced if a second partial swap is triggered before the first finishes. */
-const WRAPPER_ATTR = 'data-partial-loading';
+const LOG = '[better-moodle/partials]';
+
+// ---------------------------------------------------------------------------
+// Loading overlay
+// ---------------------------------------------------------------------------
 
 /**
- * Loads the target URL in an iframe shown immediately in place of the current
- * content. A spinner and semi-transparent barrier sit on top while the iframe
- * finishes loading and is being isolated. Once ready the wrapper is removed
- * and the bare iframe takes its final position.
- *
- * Because the iframe shares the same origin we have full DOM access.
- * All of Moodle's JS runs natively in the iframe's own context — AMD modules,
- * event listeners and widgets all initialise exactly as on a real page load.
- * @param partial   - the partial that matched the navigation
- * @param targetUrl - the URL the user is navigating to
+ * Appends a semi-transparent barrier and a spinner to `wrapper`, set above
+ * whatever iframe content is beneath them.
+ * @param wrapper   - the persistent wrapper element
+ * @param minHeight - minimum height to hold open while loading
+ * @returns references to the barrier and spinnerWrapper elements
  */
-export const applyPartial = async (
-    partial: Partial,
-    targetUrl: string
-): Promise<void> => {
-    window.history.pushState(null, '', targetUrl);
-    console.log(
-        `[better-moodle/partials] Applying partial "${partial.selector}":`,
-        window.location.href,
-        '->',
-        targetUrl
-    );
-
-    const current = document.querySelector<HTMLElement>(partial.selector);
-    if (!current) {
-        console.warn(
-            `[better-moodle/partials] Selector "${partial.selector}" not found on current page – falling back to full navigation.`
-        );
-        window.location.href = targetUrl;
-        return;
-    }
-
-    // Record the current height so the loading area doesn't collapse.
-    const currentHeight = current.scrollHeight;
-    const currentId = current.id;
-    const currentClassName = current.className;
-
-    // --- Build the loading wrapper ---
-    // Structure (back to front):
-    //   <div wrapper>            ← takes the place of current, holds the height
-    //     <iframe/>              ← loads in the background, visible but behind barrier
-    //     <div barrier/>         ← semi-transparent overlay covering the iframe
-    //     <div spinnerWrapper/>  ← spinner pinned to the top of the wrapper
-    //   </div>
-    const wrapper = document.createElement('div');
-    wrapper.setAttribute(WRAPPER_ATTR, '');
-    // Transfer identity so querySelector('#page') keeps resolving during load.
-    wrapper.id = currentId;
-    wrapper.className = currentClassName;
-    wrapper.style.cssText =
-        `position:relative;min-height:${currentHeight}px;width:100%;`;
-
-    const iframe = document.createElement('iframe');
-    iframe.style.cssText =
-        'border:0;width:100%;display:block;overflow:hidden;position:absolute;' +
-        `top:0;left:0;height:${currentHeight}px;z-index:0;`;
-    iframe.src = targetUrl;
+const addLoadingOverlay = (
+    wrapper: HTMLDivElement,
+    minHeight: number,
+): { barrier: HTMLDivElement; spinnerWrapper: HTMLDivElement } => {
+    wrapper.style.minHeight = `${minHeight}px`;
 
     const barrier = document.createElement('div');
     barrier.style.cssText =
-        'position:absolute;inset:0;background:rgba(255,255,255,1);z-index:1;';
+        'position:absolute;inset:0;background:rgba(255,255,255,1);z-index:1;pointer-events:none;';
 
     const spinnerWrapper = document.createElement('div');
     spinnerWrapper.style.cssText =
@@ -76,31 +41,75 @@ export const applyPartial = async (
     spinnerEl.setAttribute('role', 'status');
     spinnerWrapper.appendChild(spinnerEl);
 
-    wrapper.appendChild(iframe);
     wrapper.appendChild(barrier);
     wrapper.appendChild(spinnerWrapper);
 
-    // Replace current (or the previous loading wrapper) with the new wrapper.
-    current.replaceWith(wrapper);
-    console.log(`[better-moodle/partials] Loading wrapper inserted for "${partial.selector}".`);
+    return { barrier, spinnerWrapper };
+};
 
-    const loadOk = await new Promise<boolean>(resolve => {
+/**
+ * Fades out `barrier` and `spinnerWrapper` over 100 ms then removes them.
+ * @param barrier       - the white barrier element
+ * @param spinnerWrapper - the spinner container element
+ */
+const fadeOutOverlay = (
+    barrier: HTMLDivElement,
+    spinnerWrapper: HTMLDivElement,
+): void => {
+    barrier.style.transition = 'opacity 100ms ease-out';
+    spinnerWrapper.style.transition = 'opacity 100ms ease-out';
+    requestAnimationFrame(() => {
+        barrier.style.opacity = '0';
+        spinnerWrapper.style.opacity = '0';
+    });
+    setTimeout(() => {
+        barrier.remove();
+        spinnerWrapper.remove();
+    }, 110);
+};
+
+// ---------------------------------------------------------------------------
+// iframe loading & isolation
+// ---------------------------------------------------------------------------
+
+/**
+ * Creates an iframe pointing at `targetUrl`, inserts it into `wrapper` behind
+ * `barrier`, and resolves once the `load` event fires.
+ * @param wrapper   - the wrapper to insert the iframe into
+ * @param barrier   - the barrier element — iframe is inserted before this
+ * @param targetUrl - the URL to load
+ * @param height    - initial height for the iframe
+ * @returns the iframe element, or null if loading failed
+ */
+const createAndLoadIframe = async (
+    wrapper: HTMLDivElement,
+    barrier: HTMLDivElement,
+    targetUrl: string,
+    height: number,
+): Promise<HTMLIFrameElement | null> => {
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText =
+        'border:0;width:100%;display:block;overflow:hidden;' +
+        `position:absolute;top:0;left:0;height:${height}px;z-index:0;visibility:hidden;`;
+    iframe.src = targetUrl;
+    // Insert behind barrier (lower DOM order = lower z-index).
+    wrapper.insertBefore(iframe, barrier);
+
+    const ok = await new Promise<boolean>(resolve => {
         iframe.addEventListener('load', () => resolve(true), { once: true });
         iframe.addEventListener('error', () => resolve(false), { once: true });
     });
 
-    if (!loadOk) {
-        console.error('[better-moodle/partials] iframe failed to load – falling back.');
-        wrapper.replaceWith(current);
-        window.location.href = targetUrl;
-        return;
-    }
+    return ok ? iframe : null;
+};
 
-    // Wait for Moodle's AMD modules to finish mutating the iframe DOM after
-    // the load event. We use a MutationObserver that resets a timer on every
-    // change; once the DOM has been stable for 500 ms we proceed.
-    console.log('[better-moodle/partials] Waiting for iframe DOM to stabilise…');
-    await new Promise<void>(resolve => {
+/**
+ * Waits for the iframe body to stop mutating for 100 ms, indicating that
+ * Moodle's AMD modules have finished their initial DOM work.
+ * @param iframe - the iframe to observe
+ */
+const waitForIframeStable = (iframe: HTMLIFrameElement): Promise<void> =>
+    new Promise<void>(resolve => {
         let timer = setTimeout(resolve, 100);
         const obs = new MutationObserver(() => {
             clearTimeout(timer);
@@ -115,38 +124,27 @@ export const applyPartial = async (
             attributes: true,
         });
     });
-    console.log('[better-moodle/partials] iframe DOM stable, proceeding with isolation.');
 
-    const iframeDoc = iframe.contentDocument;
-    if (!iframeDoc) {
-        console.warn('[better-moodle/partials] iframe contentDocument unavailable – falling back.');
-        wrapper.replaceWith(current);
-        window.location.href = targetUrl;
-        return;
-    }
+/**
+ * Removes all elements from the iframe that are not `selector` or its
+ * ancestors, leaving only the target subtree.
+ * @param iframeDoc - the iframe's document
+ * @param selector  - CSS selector identifying the partial element
+ * @returns the isolated element, or null if not found
+ */
+const isolateIframe = (
+    iframeDoc: Document,
+    selector: string,
+): HTMLElement | null => {
+    const partialEl = iframeDoc.querySelector<HTMLElement>(selector);
+    if (!partialEl) return null;
 
-    const partialEl = iframeDoc.querySelector<HTMLElement>(partial.selector);
-    if (!partialEl) {
-        console.warn(
-            `[better-moodle/partials] Selector "${partial.selector}" not found in iframe – falling back.`
-        );
-        wrapper.replaceWith(current);
-        window.location.href = targetUrl;
-        return;
-    }
-    console.log('[better-moodle/partials] partialEl found:', partialEl);
-
-    // Log what's in the iframe body before we touch it.
-    console.groupCollapsed('[better-moodle/partials] iframe body children BEFORE isolation');
+    console.groupCollapsed(`${LOG} iframe body BEFORE isolation`);
     Array.from(iframeDoc.body.children).forEach((child, i) => {
         console.log(i, child.tagName, child.id, child.className.slice(0, 60));
     });
     console.groupEnd();
 
-    // --- Isolate the partial element inside the iframe ---
-    // Walk from partialEl up to <body>. At each level, remove every sibling
-    // so only the ancestor chain leading to partialEl (and its children)
-    // survives. Removal means no CSS battle with fixed/sticky elements.
     let node: HTMLElement | null = partialEl;
     while (node && node !== iframeDoc.body) {
         const parent: HTMLElement | null = node.parentElement;
@@ -157,8 +155,9 @@ export const applyPartial = async (
                 if (child !== keep) child.remove();
             });
             console.log(
-                `[better-moodle/partials] Removed ${before - 1} sibling(s) from`,
-                parent.tagName, parent.id || parent.className.slice(0, 40)
+                `${LOG} Removed ${before - 1} sibling(s) from`,
+                parent.tagName,
+                parent.id || parent.className.slice(0, 40),
             );
             parent.style.cssText = 'margin:0;padding:0;';
         }
@@ -166,41 +165,120 @@ export const applyPartial = async (
     }
     iframeDoc.body.style.cssText = 'margin:0;padding:0;overflow:hidden;';
 
-    // Log what remains after isolation.
-    console.groupCollapsed('[better-moodle/partials] iframe body children AFTER isolation');
+    console.groupCollapsed(`${LOG} iframe body AFTER isolation`);
     Array.from(iframeDoc.body.children).forEach((child, i) => {
         console.log(i, child.tagName, child.id, child.className.slice(0, 60));
     });
     console.groupEnd();
-    console.log('[better-moodle/partials] Iframe DOM isolated.');
 
-    // --- Finalise: remove spinner/barrier, size iframe to fill wrapper ---
-    // Do NOT move the iframe in the DOM — browsers reload iframes when they
-    // are reparented, causing the white-flash re-load we saw before.
-    // The wrapper already carries the correct id/className so external
-    // querySelector('#page') keeps resolving to it.
-    iframe.style.cssText = 'border:0;width:100%;display:block;overflow:hidden;';
-    wrapper.style.cssText = 'display:block;margin:0;padding:0;';
+    return partialEl;
+};
 
-    /** Syncs the iframe height to the scrollHeight of the partial element. */
-    const syncHeight = () => {
-        iframe.style.height = `${partialEl.scrollHeight}px`;
-    };
-    syncHeight();
-    new ResizeObserver(syncHeight).observe(partialEl);
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
-    // Fade out the barrier and spinner over 100 ms, then remove them.
-    barrier.style.transition = 'opacity 100ms ease-out';
-    spinnerWrapper.style.transition = 'opacity 100ms ease-out';
-    requestAnimationFrame(() => {
-        barrier.style.opacity = '0';
-        spinnerWrapper.style.opacity = '0';
-    });
-    setTimeout(() => {
+/**
+ * Applies a partial swap, loading `targetUrl` in an iframe and isolating the
+ * element matching `partial.selector`.
+ *
+ * Subsequent calls for already-cached URLs are instant — the existing iframe
+ * is revealed immediately without a network request.
+ * @param partial      - the partial that matched the navigation
+ * @param targetUrl    - the URL the user is navigating to
+ * @param pushHistory  - whether to push a new history entry (false when
+ *                       called from a popstate handler where the URL is
+ *                       already correct)
+ */
+export const applyPartial = async (
+    partial: Partial,
+    targetUrl: string,
+    pushHistory = true,
+): Promise<void> => {
+    const normUrl = normaliseUrl(targetUrl);
+
+    console.log(
+        `${LOG} Applying partial "${partial.selector}":`,
+        window.location.href,
+        '->',
+        targetUrl,
+    );
+
+    const current = document.querySelector<HTMLElement>(partial.selector);
+    if (!current) {
+        console.warn(`${LOG} Selector "${partial.selector}" not found – falling back.`);
+        window.location.href = targetUrl;
+        return;
+    }
+
+    const currentHeight = current.scrollHeight;
+    const entry = getOrCreateCache(partial.selector, current);
+    const { wrapper } = entry;
+
+    // --- Cache hit: show existing iframe immediately ---
+    if (isCached(partial.selector, normUrl)) {
+        console.log(`${LOG} Cache hit for "${normUrl}" — showing instantly.`);
+        const cached = getCached(partial.selector, normUrl)!;
+        activateIframe(entry, normUrl);
+        attachHeightSync(entry, cached.iframe, cached.partialEl);
+        if (pushHistory) window.history.pushState(null, '', targetUrl);
+        return;
+    }
+
+    // --- Cache miss: load in a new iframe ---
+    // Scroll to the top of the wrapper so the spinner is always in view.
+    wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    const { barrier, spinnerWrapper } = addLoadingOverlay(wrapper, currentHeight);
+
+    console.log(`${LOG} Loading "${targetUrl}" in new iframe…`);
+    const iframe = await createAndLoadIframe(wrapper, barrier, targetUrl, currentHeight);
+
+    if (!iframe) {
+        console.error(`${LOG} iframe failed to load – falling back.`);
         barrier.remove();
         spinnerWrapper.remove();
-        console.log(
-            `[better-moodle/partials] Partial "${partial.selector}" applied successfully.`
-        );
-    }, 110);
+        window.location.href = targetUrl;
+        return;
+    }
+
+    console.log(`${LOG} Waiting for iframe DOM to stabilise…`);
+    await waitForIframeStable(iframe);
+    console.log(`${LOG} iframe DOM stable, proceeding with isolation.`);
+
+    const iframeDoc = iframe.contentDocument;
+    if (!iframeDoc) {
+        console.warn(`${LOG} iframe contentDocument unavailable – falling back.`);
+        barrier.remove();
+        spinnerWrapper.remove();
+        iframe.remove();
+        window.location.href = targetUrl;
+        return;
+    }
+
+    const partialEl = isolateIframe(iframeDoc, partial.selector);
+    if (!partialEl) {
+        console.warn(`${LOG} Selector "${partial.selector}" not found in iframe – falling back.`);
+        barrier.remove();
+        spinnerWrapper.remove();
+        iframe.remove();
+        window.location.href = targetUrl;
+        return;
+    }
+
+    // --- Store, activate, finalise ---
+    storeCached(partial.selector, normUrl, { iframe, partialEl });
+    activateIframe(entry, normUrl);
+
+    iframe.style.position = 'static';
+    iframe.style.visibility = 'visible';
+    attachHeightSync(entry, iframe, partialEl);
+    wrapper.style.minHeight = '';
+    wrapper.style.margin = '0';
+    wrapper.style.padding = '0';
+
+    if (pushHistory) window.history.pushState(null, '', targetUrl);
+    fadeOutOverlay(barrier, spinnerWrapper);
+
+    console.log(`${LOG} Partial "${partial.selector}" applied successfully.`);
 };
