@@ -48,6 +48,15 @@ export interface PartialCacheOptions {
      * navigation URL list.
      */
     pinUrls?: RegExp[];
+    /**
+     * Optional extra predicate evaluated after URL-pattern matching.
+     * Both `currentUrl` and `targetUrl` match the URL list when this is called.
+     * Return `false` to refuse the partial swap and fall through to the next
+     * partial (or a full navigation).
+     * @param currentUrl - the URL the user is navigating from
+     * @param targetUrl  - the URL the user is navigating to
+     */
+    condition?: (currentUrl: string, targetUrl: string) => boolean;
 }
 
 /**
@@ -65,12 +74,15 @@ export class PartialFragment {
     readonly cacheSize: number;
     /** URL patterns whose cached iframes are never evicted. */
     readonly pinUrls: RegExp[];
+    /** Optional extra predicate applied on top of URL-pattern matching. */
+    readonly condition: ((currentUrl: string, targetUrl: string) => boolean) | null;
 
     constructor(selector: string, urls: RegExp[], options: PartialCacheOptions = {}) {
         this.selector = selector;
         this.urls = urls;
         this.cacheSize = options.cacheSize ?? 5;
         this.pinUrls = options.pinUrls ?? [];
+        this.condition = options.condition ?? null;
     }
 
     /**
@@ -79,6 +91,19 @@ export class PartialFragment {
      */
     matches(url: string): boolean {
         return this.urls.some(pattern => pattern.test(stripTrailingSlash(url)));
+    }
+
+    /**
+     * Returns true if both URLs match the pattern list and the optional condition.
+     * @param currentUrl - the URL the user is navigating from
+     * @param targetUrl  - the URL the user is navigating to
+     */
+    matchesBoth(currentUrl: string, targetUrl: string): boolean {
+        return (
+            this.matches(currentUrl) &&
+            this.matches(targetUrl) &&
+            (this.condition === null || this.condition(currentUrl, targetUrl))
+        );
     }
 
     /**

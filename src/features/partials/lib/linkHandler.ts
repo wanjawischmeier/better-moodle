@@ -42,7 +42,7 @@ const findMatchingPartial = (
     currentUrl: string,
     targetUrl: string
 ): PartialFragment | undefined =>
-    partials.find(p => p.matches(currentUrl) && p.matches(targetUrl));
+    partials.find(p => p.matchesBoth(currentUrl, targetUrl));
 
 /**
  * Builds the click handler for the given set of partials.

@@ -5,11 +5,20 @@ import { applyPartial } from './lib/partialHandler';
 
 /** All registered partials, checked in order on each navigation. */
 const partials: PartialFragment[] = [
+    // All course pages with a content section
     new PartialFragment('#page-content', [
         patternToRegex('MOODLE_URL/course/view.php?id=*'),
         patternToRegex('MOODLE_URL/user/index.php?id=*'),
         patternToRegex('MOODLE_URL/grade/report/index.php?id=*'),
-    ]),
+    ], {
+        condition: (currentUrl: string, targetUrl: string) => {
+            const currentId = new URL(currentUrl).searchParams.get('id');
+            const targetId = new URL(targetUrl).searchParams.get('id');
+            return currentId !== null && currentId === targetId;
+        },
+    }),
+
+    // All pages with the main header
     new PartialFragment('#page', [
         patternToRegex('MOODLE_URL/my/'),
         patternToRegex('MOODLE_URL/my/*'),
@@ -17,6 +26,11 @@ const partials: PartialFragment[] = [
         patternToRegex('MOODLE_URL/course/view.php?id=*'),
         patternToRegex('MOODLE_URL/user/index.php?id=*'),
         patternToRegex('MOODLE_URL/grade/report/index.php?id=*'),
+        patternToRegex('MOODLE_URL/message/*'),
+        patternToRegex('MOODLE_URL/calendar/*'),
+        patternToRegex('MOODLE_URL/user/files.php'),
+        patternToRegex('MOODLE_URL/user/preferences.php'),
+        patternToRegex('MOODLE_URL/reportbuilder/index.php'),
     ], {
         pinUrls: [
             patternToRegex('MOODLE_URL/my/'),
