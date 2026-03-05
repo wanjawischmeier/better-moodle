@@ -239,20 +239,17 @@ const isolateIframe = (
  * @param pushHistory  - whether to push a new history entry (false when
  *                       called from a popstate handler where the URL is
  *                       already correct)
+ * @param fromUrl      - the URL being navigated away from (for logging);
+ *                       defaults to the current top-level URL if omitted
  */
 export const applyPartial = async (
     partial: PartialFragment,
     targetUrl: string,
     pushHistory = true,
 ): Promise<void> => {
-    console.log(
-        `${LOG} Applying partial "${partial.selector}":`,
-        window.top!.location.href,
-        '->',
-        targetUrl,
-    );
+    const topDoc = window.top!.document;
 
-    const current = document.querySelector<HTMLElement>(partial.selector);
+    const current = topDoc.querySelector<HTMLElement>(partial.selector);
     if (!current) {
         console.warn(`${LOG} Selector "${partial.selector}" not found – falling back.`);
         window.top!.location.href = targetUrl;
@@ -268,7 +265,7 @@ export const applyPartial = async (
     //     <div barrier/>    ← white overlay while loading
     //     <div spinner/>    ← spinner on top
     //   </div>
-    const wrapper = document.createElement('div');
+    const wrapper = topDoc.createElement('div');
     wrapper.id = current.id;
     wrapper.className = current.className;
     wrapper.style.cssText = `position:relative;width:100%;min-height:${currentHeight}px;`;

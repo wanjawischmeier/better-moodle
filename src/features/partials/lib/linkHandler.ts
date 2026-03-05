@@ -95,9 +95,16 @@ const buildClickHandler =
 
         event.preventDefault();
 
+        // Capture the current URL before pushState changes it.
+        const fromUrl = topLocation.href;
         // Update URL and nav state immediately on click, before the swap loads.
         window.top!.history.pushState(null, '', href);
         updateNavActiveState(href);
+        
+        console.log(
+            `[better-moodle/partials] Applying partial "${partial.selector}":`,
+            fromUrl, '->', href,
+        );
         void applyPartial(partial, href, false);
     };
 
