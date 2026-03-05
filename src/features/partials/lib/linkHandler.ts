@@ -53,8 +53,16 @@ const buildClickHandler =
             targetParsed.origin === window.location.origin &&
             targetParsed.pathname === window.location.pathname &&
             targetParsed.search === window.location.search
-        )
+        ) {
             return;
+        }
+        
+        // Do nothing if already on target page - TODO doesnt work rn
+        if (targetParsed.href === window.location.href) {
+            console.log('Already on target page!');
+            event.preventDefault();
+            return;
+        }
 
         const partial = findMatchingPartial(partials, window.location.href, href);
         if (!partial) {
@@ -66,8 +74,45 @@ const buildClickHandler =
         }
 
         event.preventDefault();
-        void applyPartial(partial, href);
+        void applyPartial(partial, href).then(() => {
+            updateNavActiveState(href);
+        });
     };
+
+/**
+ * Updates the active state of navbar links in the host page to reflect the
+ * new URL after a partial swap.  Moodle sets `active` class and
+ * `aria-current` server-side, so they never update automatically when we
+ * intercept navigation.
+ * @param targetUrl - the URL that was just navigated to
+ */
+const updateNavActiveState = (targetUrl: string): void => {
+    const target = new URL(targetUrl);
+
+    document.querySelectorAll<HTMLAnchorElement>('a[href]').forEach(a => {
+        // Only touch links that look like nav/menu items.
+        if (!a.closest('nav, [role="menu"], [role="menubar"], [role="navigation"]')) return;
+
+        let aUrl: URL;
+        try {
+            aUrl = new URL(a.href);
+        } catch {
+            return;
+        }
+
+        const isMatch =
+            aUrl.origin === target.origin &&
+            aUrl.pathname === target.pathname &&
+            aUrl.search === target.search;
+
+        a.classList.toggle('active', isMatch);
+        if (isMatch) {
+            a.setAttribute('aria-current', 'true');
+        } else {
+            a.removeAttribute('aria-current');
+        }
+    });
+};
 
 let clickHandler: ((event: MouseEvent) => void) | null = null;
 

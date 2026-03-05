@@ -1,157 +1,16 @@
 import { Partial } from './Partial';
-import { getLoadingSpinner } from '@/DOM';
-import { request } from '@/network';
-import { requirePromise } from '@/require.js';
 
 /**
- * Parses `M.cfg` out of the inline head scripts of a fetched Moodle document
- * and merges it into the live `M.cfg`.  Many AMD modules read M.cfg at
- * runtime (contextid, sesskey, courseId, …) so this must happen before any
- * body scripts are executed.
- * @param incoming - the fetched document
- */
-const updateMoodleConfig = (incoming: Document): void => {
-    // M.cfg is assigned as a plain object literal inside a <script> in <head>.
-    // We look for the canonical pattern Moodle has used since at least 3.x:
-    //   M.cfg = {...};
-    for (const script of incoming.head.querySelectorAll<HTMLScriptElement>(
-        'script:not([src])'
-    )) {
-        const text = script.textContent ?? '';
-        const match = /M\.cfg\s*=\s*(\{[\s\S]*?\});/.exec(text);
-        if (!match) continue;
-        try {
-            const newCfg = JSON.parse(match[1]) as Record<string, unknown>;
-            Object.assign(M.cfg, newCfg);
-            console.log(
-                '[better-moodle/partials] M.cfg updated:',
-                newCfg
-            );
-        } catch (e) {
-            console.warn(
-                '[better-moodle/partials] Failed to parse M.cfg from fetched document.',
-                e
-            );
-        }
-        break;
-    }
-};
-
-/**
- * Syncs the live <body> element's `id` and `class` to those of the fetched
- * document.  Moodle uses body classes like `page-my-index`, `path-my`, etc.
- * as selectors in both CSS and JS, so mismatches cause widgets to not init.
- * @param incoming - the fetched document
- */
-const syncBodyAttributes = (incoming: Document): void => {
-    const { id, className } = incoming.body;
-    if (id) {
-        document.body.id = id;
-        console.log('[better-moodle/partials] body#id →', id);
-    }
-    if (className) {
-        document.body.className = className;
-        console.log('[better-moodle/partials] body.class →', className);
-    }
-};
-
-/**
- * Extracts all inline scripts from a document's body and runs them through
- * Moodle's template JS runner, then notifies the filter system about the
- * updated content.  This replicates what Moodle does internally after a
- * template render so that AMD modules (dynamic widgets, grade tables, etc.)
- * initialise correctly after a partial swap.
- * @param incoming  - the fetched document whose body scripts should be run
- * @param inserted  - the element that was just inserted into the live DOM
- */
-const runPageScripts = async (
-    incoming: Document,
-    inserted: Element
-): Promise<void> => {
-    // Must happen before scripts run so AMD modules see correct context.
-    updateMoodleConfig(incoming);
-    syncBodyAttributes(incoming);
-
-    // Collect every inline <script> in the body of the fetched document.
-    // We intentionally skip <script src="…"> – those are already loaded by the
-    // live page (RequireJS itself, jQuery, etc.) and must not be re-evaluated.
-    const inlineScripts = Array.from(
-        incoming.body.querySelectorAll<HTMLScriptElement>('script:not([src])')
-    )
-        .map(s => s.textContent ?? '')
-        .filter(Boolean);
-
-    const [templates, filterEvents] = await requirePromise([
-        'core/templates',
-        'core_filters/events',
-    ] as const);
-
-    if (inlineScripts.length) {
-        console.log(
-            `[better-moodle/partials] Running ${inlineScripts.length} inline script(s)…`
-        );
-        inlineScripts.forEach((script, i) => {
-            console.groupCollapsed(
-                `[better-moodle/partials] Script ${i + 1}/${inlineScripts.length}`
-            );
-            console.log(script.trim());
-            console.groupEnd();
-        });
-        // runTemplateJS is how Moodle executes JS that accompanies rendered
-        // templates – it handles the AMD require() calls correctly.
-        templates.runTemplateJS(inlineScripts.join('\n'));
-    } else {
-        console.log(
-            '[better-moodle/partials] No inline scripts found in fetched document.'
-        );
-    }
-
-    // Tell Moodle's filter system that new content is in the DOM so that
-    // things like MathJax, glossary auto-linking, etc. are applied.
-    filterEvents.notifyFilterContentUpdated([inserted]);
-
-    // core/first.start() is what javascript-static.js calls on a real page
-    // load to scan the DOM for data-init attributes and bootstrap all AMD
-    // block/widget modules.  We must call it again so the new content gets
-    // the same treatment.  core/first is not in the typed module map so we
-    // use the raw requirejs global.
-    await new Promise<void>(resolve => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (requirejs as unknown as (deps: string[], cb: (m: any) => void) => void)(['core/first'], (first: any) => {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-            console.log('[better-moodle/partials] core/first module:', first, 'keys:', Object.keys(first ?? {}));
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-            if (typeof first?.start === 'function') {
-                console.log('[better-moodle/partials] Calling core/first.start(M.cfg)…');
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-                first.start(M.cfg);
-            } else {
-                console.warn('[better-moodle/partials] core/first.start is not a function – skipping.');
-            }
-            resolve();
-        });
-    });
-
-    console.log('[better-moodle/partials] Page scripts executed.');
-};
-
-/**
- * Fetches the HTML of a URL and returns it as a parsed Document.
- * @param url - the URL to fetch
- * @returns the parsed Document
- */
-const fetchDocument = async (url: string): Promise<Document> => {
-    console.log('[better-moodle/partials] Fetching document:', url);
-    const response = await request(url);
-    const html = await response.text();
-    return new DOMParser().parseFromString(html, 'text/html');
-};
-
-/**
- * Applies the partial-switching logic for the given partial and target URL.
- * Replaces the element matching the partial's selector with a loading spinner,
- * fetches the target URL, then swaps the spinner for the matching element from
- * the fetched document.
+ * Loads the target URL in an off-screen hidden iframe, isolates the partial
+ * element inside it, then replaces the host element with the sized iframe.
+ *
+ * The host element stays visible with a spinner overlaid during loading so
+ * layout is undisturbed. The iframe is inserted into the live DOM only once
+ * it is fully prepared, eliminating any flash of unstyled content.
+ *
+ * Because the iframe shares the same origin we have full DOM access.
+ * All of Moodle's JS runs natively in the iframe's own context — AMD modules,
+ * event listeners and widgets all initialise exactly as on a real page load.
  * @param partial   - the partial that matched the navigation
  * @param targetUrl - the URL the user is navigating to
  */
@@ -166,7 +25,7 @@ export const applyPartial = async (
         targetUrl
     );
 
-    const current = document.querySelector(partial.selector);
+    const current = document.querySelector<HTMLElement>(partial.selector);
     if (!current) {
         console.warn(
             `[better-moodle/partials] Selector "${partial.selector}" not found on current page – falling back to full navigation.`
@@ -175,42 +34,150 @@ export const applyPartial = async (
         return;
     }
 
-    // Show the spinner while the new content is loading.
-    const spinner = await getLoadingSpinner();
-    current.replaceWith(spinner);
-    console.log(
-        `[better-moodle/partials] Spinner shown for "${partial.selector}".`
-    );
+    // --- Overlay a spinner on top of the existing element ---
+    // Keep current in place so layout is undisturbed while the iframe loads.
+    // We use a CSS-only spinner so it shows immediately without waiting for
+    // an async Moodle template render.
+    const spinnerWrapper = document.createElement('div');
+    spinnerWrapper.style.cssText =
+        'position:absolute;inset:0;display:flex;align-items:center;' +
+        'justify-content:center;background:rgba(255,255,255,0.6);z-index:9999;';
+    const spinnerEl = document.createElement('div');
+    spinnerEl.className = 'spinner-border text-primary';
+    spinnerEl.setAttribute('role', 'status');
+    spinnerWrapper.appendChild(spinnerEl);
 
-    let incoming: Document;
-    try {
-        incoming = await fetchDocument(targetUrl);
-    } catch (err) {
-        console.error(
-            '[better-moodle/partials] Fetch failed – falling back to full navigation.',
-            err
-        );
+    const previousPosition = current.style.position;
+    if (!['relative', 'absolute', 'fixed', 'sticky'].includes(getComputedStyle(current).position)) {
+        current.style.position = 'relative';
+    }
+    current.appendChild(spinnerWrapper);
+    console.log(`[better-moodle/partials] Spinner overlaid on "${partial.selector}".`);
+
+    // --- Load the target URL in an iframe, shown immediately ---
+    // The spinner overlaid on current is still visible on top.
+    // Once isolation is done we remove the spinner.
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = `border:0;padding:0;margin:0;display:block;`;
+    iframe.src = targetUrl;
+    // Insert the iframe right after current so it occupies the same spot.
+    // current stays in the DOM so the spinner wrapper keeps its position.
+    current.insertAdjacentElement('afterend', iframe);
+
+    const loadOk = await new Promise<boolean>(resolve => {
+        iframe.addEventListener('load', () => resolve(true), { once: true });
+        iframe.addEventListener('error', () => resolve(false), { once: true });
+    });
+
+    if (!loadOk) {
+        console.error('[better-moodle/partials] iframe failed to load – falling back.');
+        iframe.remove();
+        spinnerWrapper.remove();
+        current.style.position = previousPosition;
         window.location.href = targetUrl;
         return;
     }
 
-    const replacement = incoming.querySelector(partial.selector);
-    if (!replacement) {
+    // Wait for Moodle's AMD modules to finish mutating the iframe DOM after
+    // the load event. We use a MutationObserver that resets a timer on every
+    // change; once the DOM has been stable for 500 ms we proceed.
+    console.log('[better-moodle/partials] Waiting for iframe DOM to stabilise…');
+    await new Promise<void>(resolve => {
+        let timer = setTimeout(resolve, 1000);
+        const obs = new MutationObserver(() => {
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                obs.disconnect();
+                resolve();
+            }, 1000);
+        });
+        obs.observe(iframe.contentDocument!.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+        });
+    });
+    console.log('[better-moodle/partials] iframe DOM stable, proceeding with isolation.');
+
+    const iframeDoc = iframe.contentDocument;
+    if (!iframeDoc) {
+        console.warn('[better-moodle/partials] iframe contentDocument unavailable – falling back.');
+        iframe.remove();
+        spinnerWrapper.remove();
+        current.style.position = previousPosition;
+        window.location.href = targetUrl;
+        return;
+    }
+
+    const partialEl = iframeDoc.querySelector<HTMLElement>(partial.selector);
+    if (!partialEl) {
         console.warn(
-            `[better-moodle/partials] Selector "${partial.selector}" not found in fetched document – falling back to full navigation.`
+            `[better-moodle/partials] Selector "${partial.selector}" not found in iframe – falling back.`
         );
+        iframe.remove();
+        spinnerWrapper.remove();
+        current.style.position = previousPosition;
         window.location.href = targetUrl;
         return;
     }
+    console.log('[better-moodle/partials] partialEl found:', partialEl);
 
-    spinner.replaceWith(replacement);
-    // Keep the browser URL in sync with the navigation that just happened.
+    // Log what's in the iframe body before we touch it.
+    console.groupCollapsed('[better-moodle/partials] iframe body children BEFORE isolation');
+    Array.from(iframeDoc.body.children).forEach((child, i) => {
+        console.log(i, child.tagName, child.id, child.className.slice(0, 60));
+    });
+    console.groupEnd();
+
+    // --- Isolate the partial element inside the iframe ---
+    // Walk from partialEl up to <body>. At each level, remove every sibling
+    // so only the ancestor chain leading to partialEl (and its children)
+    // survives. Removal means no CSS battle with fixed/sticky elements.
+    let node: HTMLElement | null = partialEl;
+    while (node && node !== iframeDoc.body) {
+        const parent: HTMLElement | null = node.parentElement;
+        if (parent) {
+            const keep = node;
+            const before = parent.children.length;
+            Array.from(parent.children).forEach(child => {
+                if (child !== keep) child.remove();
+            });
+            console.log(
+                `[better-moodle/partials] Removed ${before - 1} sibling(s) from`,
+                parent.tagName, parent.id || parent.className.slice(0, 40)
+            );
+            parent.style.cssText = 'margin:0;padding:0;';
+        }
+        node = parent;
+    }
+    iframeDoc.body.style.cssText = 'margin:0;padding:0;overflow:hidden;';
+
+    // Log what remains after isolation.
+    console.groupCollapsed('[better-moodle/partials] iframe body children AFTER isolation');
+    Array.from(iframeDoc.body.children).forEach((child, i) => {
+        console.log(i, child.tagName, child.id, child.className.slice(0, 60));
+    });
+    console.groupEnd();
+    console.log('[better-moodle/partials] Iframe DOM isolated.');
+
+    // --- Finalise: size the iframe, transfer identity, remove old element ---
+    // Transfer id/class so external querySelector('#page') keeps resolving.
+    
+    iframe.id = current.id;
+    iframe.className = current.className;
+
+    /** Syncs the iframe height to the scrollHeight of the partial element. */
+    const syncHeight = () => {
+        iframe.style.height = `${partialEl.scrollHeight}px`;
+    };
+    syncHeight();
+    new ResizeObserver(syncHeight).observe(partialEl);
+
+    // Remove the original element (spinner goes with it).
+    current.remove();
+
     window.history.pushState(null, '', targetUrl);
     console.log(
         `[better-moodle/partials] Partial "${partial.selector}" applied successfully.`
     );
-
-    // Re-run the page's AMD initialisation scripts so that Moodle's
-    // dynamically-rendered widgets work in the swapped content.
-    await runPageScripts(incoming, replacement);
 };
