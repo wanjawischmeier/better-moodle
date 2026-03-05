@@ -127,7 +127,7 @@ const createAndLoadIframe = async (
     const iframe = document.createElement('iframe');
     iframe.style.cssText =
         'border:0;width:100%;display:block;overflow:hidden;' +
-        `position:absolute;top:0;left:0;height:${height}px;z-index:0;visibility:hidden;`;
+        `position:absolute;top:0;left:0;height:${height}px;z-index:0;`;
     iframe.src = targetUrl;
     // Insert behind barrier (lower DOM order = lower z-index).
     wrapper.insertBefore(iframe, barrier);
@@ -274,8 +274,8 @@ export const applyPartial = async (
     });
 
     current.replaceWith(wrapper);
-    // Scroll to show the spinner immediately.
-    wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Scroll the top-level page to the very top so the spinner is visible.
+    window.top!.scrollTo({ top: 0, behavior: 'smooth' });
 
     console.log(`${LOG} Loading "${targetUrl}" in new iframe…`);
     const iframe = await createAndLoadIframe(wrapper, barrier, targetUrl, currentHeight);
