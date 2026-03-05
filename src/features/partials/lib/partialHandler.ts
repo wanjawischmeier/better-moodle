@@ -6,6 +6,7 @@ import {
     getOrCreateCache,
     isCached,
     normaliseUrl,
+    removeUncachedIframes,
     storeCached,
 } from './partialCache';
 
@@ -269,6 +270,9 @@ export const applyPartial = async (
     // --- Store, activate, finalise ---
     storeCached(partial.selector, normUrl, { iframe, partialEl });
     activateIframe(entry, normUrl);
+    // Remove any iframes left over from previous swaps that weren't stored in
+    // the cache (e.g. when caching is disabled).
+    removeUncachedIframes(entry, iframe);
 
     iframe.style.position = 'static';
     iframe.style.visibility = 'visible';

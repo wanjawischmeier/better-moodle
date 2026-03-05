@@ -23,6 +23,18 @@ export interface PartialCache {
 
 const cache = new Map<string, PartialCache>();
 
+/** When false, cache lookups always miss and new iframes are never stored. */
+let cachingEnabled = false;
+
+/**
+ * Enables or disables iframe caching.
+ * @param enabled - pass `true` to enable, `false` to disable
+ */
+export const setCachingEnabled = (enabled: boolean): void => {
+    cachingEnabled = enabled;
+    console.log(`[better-moodle/partials] Caching ${enabled ? 'enabled' : 'disabled'}.`);
+};
+
 /**
  * Normalises a URL for use as a cache key.
  * Strips a trailing slash, preserves query string and hash.
@@ -79,7 +91,7 @@ export const getOrCreateCache = (
  * @returns true if a cached iframe exists for this selector + URL combination
  */
 export const isCached = (selector: string, normUrl: string): boolean =>
-    cache.get(selector)?.iframes.has(normUrl) ?? false;
+    cachingEnabled && (cache.get(selector)?.iframes.has(normUrl) ?? false);
 
 /**
  * Returns the cached entry for a URL, if it exists.
@@ -90,7 +102,7 @@ export const isCached = (selector: string, normUrl: string): boolean =>
 export const getCached = (
     selector: string,
     normUrl: string,
-): CachedIframe | undefined => cache.get(selector)?.iframes.get(normUrl);
+): CachedIframe | undefined => cachingEnabled ? cache.get(selector)?.iframes.get(normUrl) : undefined;
 
 /**
  * Stores a newly prepared iframe in the cache, evicting the oldest non-pinned
@@ -104,6 +116,7 @@ export const storeCached = (
     normUrl: string,
     cached: CachedIframe,
 ): void => {
+    if (!cachingEnabled) return;
     const entry = cache.get(selector);
     if (!entry) return;
 
@@ -128,6 +141,25 @@ export const storeCached = (
     }
 
     entry.iframes.set(normUrl, cached);
+};
+
+/**
+ * Removes any iframe children of the wrapper that are not present in the
+ * cache map.  Called after each swap so that uncached (caching-disabled)
+ * iframes from previous swaps don't accumulate in the DOM.
+ * @param entry       - the PartialCache for the selector
+ * @param keepIframe  - the newly activated iframe to exempt from removal
+ */
+export const removeUncachedIframes = (
+    entry: PartialCache,
+    keepIframe: HTMLIFrameElement,
+): void => {
+    Array.from(entry.wrapper.querySelectorAll<HTMLIFrameElement>('iframe')).forEach(iframe => {
+        const isCachedIframe = Array.from(entry.iframes.values()).some(c => c.iframe === iframe);
+        if (!isCachedIframe && iframe !== keepIframe) {
+            iframe.remove();
+        }
+    });
 };
 
 /**

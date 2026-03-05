@@ -9,7 +9,8 @@
 - [ ] Fix bettermoodle action buttons
 - [ ] Test interactive iframe elements
 - [ ] Fix header selection
-- [ ] Hierarchical partials
+- [x] Hierarchical partials
+- [x] Caching on/off
 
 ## Final
 - [ ] Adress circular back navigation
