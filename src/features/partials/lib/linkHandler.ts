@@ -6,7 +6,6 @@ const BORDER_PROPS = [
     'border-bottom-color',
     'border-bottom-style',
     'border-bottom-width',
-    'box-shadow',
 ] as const;
 
 /**
@@ -94,6 +93,7 @@ const buildClickHandler =
         }
 
         event.preventDefault();
+        link.blur();
 
         // Capture the current URL before pushState changes it.
         const fromUrl = topLocation.href;

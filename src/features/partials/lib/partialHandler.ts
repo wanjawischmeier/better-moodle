@@ -68,8 +68,10 @@ const addLoadingOverlay = (
     const ownerDoc = wrapper.ownerDocument;
 
     const barrier = ownerDoc.createElement('div');
+    let backgroundColor = window.top!.getComputedStyle(document.body).backgroundColor;
+    backgroundColor = backgroundColor.replace(')', ',0.95)');
     barrier.style.cssText =
-        'position:absolute;inset:0;background:rgba(255,255,255,0.9999);z-index:1;pointer-events:none;';
+        `position:absolute;inset:0;background:${backgroundColor};z-index:1;pointer-events:none;`;
 
     const spinnerWrapper = ownerDoc.createElement('div');
     spinnerWrapper.style.cssText =
@@ -251,7 +253,24 @@ export const applyPartial = async (
 ): Promise<void> => {
     const topDoc = window.top!.document;
 
-    const current = topDoc.querySelector<HTMLElement>(partial.selector);
+    let current: HTMLElement | null = null;
+    current ??= topDoc.querySelector<HTMLElement>(partial.selector);
+
+    // Prioritize searching in iframes
+    // TODO: possibly seach in hierarchical order
+    const iframes = Array.from(topDoc.querySelectorAll('iframe'));
+    for (const iframe of iframes) {
+        if (iframe.contentWindow?.location.origin !== window.location.origin) continue;
+
+        const el = iframe.contentDocument?.querySelector<HTMLElement>(partial.selector);
+        if (el) {
+            current = el;
+            break;
+        }
+    }
+
+    // Fallback to top document
+
     if (!current) {
         console.warn(`${LOG} Selector "${partial.selector}" not found – falling back.`);
         window.top!.location.href = targetUrl;
