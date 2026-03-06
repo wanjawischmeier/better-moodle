@@ -75,6 +75,8 @@ export interface PartialCacheOptions {
      * the partial's container.
      */
     stylePatches?: StylePatch[];
+    
+    readonly preferTopDocMatch?: boolean;
 }
 
 /**
@@ -96,6 +98,7 @@ export class PartialFragment {
     readonly condition: ((currentUrl: string, targetUrl: string) => boolean) | null;
     /** Style patches applied to the top-level document on every partial swap. */
     readonly stylePatches: StylePatch[];
+    readonly preferTopDocMatch: boolean;
 
     constructor(selector: string, urls: RegExp[], options: PartialCacheOptions = {}) {
         this.selector = selector;
@@ -104,6 +107,7 @@ export class PartialFragment {
         this.pinUrls = options.pinUrls ?? [];
         this.condition = options.condition ?? null;
         this.stylePatches = options.stylePatches ?? [];
+        this.preferTopDocMatch = options.preferTopDocMatch ?? false;
     }
 
     /**
@@ -133,5 +137,18 @@ export class PartialFragment {
      */
     isPinned(url: string): boolean {
         return this.pinUrls.some(pattern => pattern.test(stripTrailingSlash(url)));
+    }
+}
+
+
+export class PartialElement {
+    readonly doc: Document;
+    readonly iframe: HTMLIFrameElement;
+    readonly innerElement: HTMLElement;
+
+    constructor(partialDoc: Document, iframe: HTMLIFrameElement, innerElement: HTMLElement) {
+        this.doc = partialDoc;
+        this.iframe = iframe;
+        this.innerElement = innerElement;
     }
 }

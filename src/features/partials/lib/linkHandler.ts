@@ -1,5 +1,5 @@
 import { PartialFragment } from './Partial';
-import { applyPartial } from './partialHandler';
+import { applyPartial } from './partialManager';
 
 /** Border longhand properties that drive the active-tab underline. */
 const BORDER_PROPS = [

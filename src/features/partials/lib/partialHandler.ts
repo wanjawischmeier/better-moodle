@@ -1,284 +1,134 @@
-import { PartialFragment } from './Partial';
+import { createAndLoadIframe, isolateIframe, waitForIframeStable } from "./iframeHandler";
+import { clearInFlight, registerInFlight } from "./inFlight";
+import { addLoadingOverlay, fadeOutOverlay } from "./loadingOverlay";
+import { PartialElement, PartialFragment } from "./Partial";
 
-const LOG = '[better-moodle/partials]';
+const LOG = '[better-moodle/partials/partialHandler]';
 
 // ---------------------------------------------------------------------------
-// In-flight cancellation
+// Ancestor-partial detection (fix for nested iframes with duplicate src)
 // ---------------------------------------------------------------------------
 
-interface InFlightCleanup {
-    /** Marks the swap as cancelled so awaiting code exits early. */
-    cancel: () => void;
-    /** Removes the overlay + any not-yet-stored iframe from the wrapper. */
-    cleanup: () => void;
+/**
+ * Walks the iframe ancestor chain to find the **outermost** ancestor window
+ * whose URL already equals `targetUrl`.  When found, the wrapper element of
+ * that ancestor's `<iframe>` has its hidden original children restored and the
+ * `<iframe>` itself is removed — which cascades and destroys all inner iframes,
+ * including the current one.
+ *
+ * This prevents the browser from blocking a nested iframe that would otherwise
+ * have the same `src` as one of its ancestors.
+ *
+ * Pairs iterated (childWin → parentWin):
+ *   (window,              window.parent)
+ *   (window.parent,       window.parent.parent)
+ *   …
+ * The outermost (last) matching pair is used so the minimal subtree is torn
+ * down.
+ * @param targetUrl - the URL being navigated to
+ * @returns `true` if an ancestor match was found and handled
+ */
+export function restoreMatchingOuterPartial(targetUrl: string): boolean {
+    if (window === window.top) return false;
+
+    let targetHref: string;
+    try {
+        targetHref = new URL(targetUrl, window.location.href).href;
+    } catch {
+        return false;
+    }
+
+    let outermost: { iframeEl: HTMLIFrameElement; wrapper: HTMLElement } | null = null;
+
+    // Walk from the current window up to (but not including) window.top.
+    // childWin is the window whose src we test; parentWin owns the <iframe> element.
+    let childWin: Window = window;
+    let parentWin: Window = window.parent;
+
+    while (childWin !== window.top) {
+        try {
+            const childHref = new URL(childWin.location.href).href;
+            if (childHref !== targetHref) {
+                childWin = parentWin;
+                parentWin = parentWin.parent;
+                continue;
+            }
+        } catch {
+            // Cross-origin ancestor — stop walking.
+            break;
+        }
+
+        const capturedChild = childWin;
+        const iframeEl = Array.from(
+            parentWin.document.querySelectorAll<HTMLIFrameElement>('iframe'),
+        ).find(el => el.contentWindow === capturedChild);
+
+        if (iframeEl?.parentElement instanceof HTMLElement) {
+            // Keep updating so we end up with the outermost (last) match.
+            outermost = { iframeEl, wrapper: iframeEl.parentElement };
+        }
+
+        childWin = parentWin;
+        parentWin = parentWin.parent;
+    }
+
+    if (!outermost) return false;
+
+    const { iframeEl, wrapper } = outermost;
+
+    // Un-hide the original children that were preserved by fix (a).
+    Array.from(wrapper.children).forEach(child => {
+        if (child !== iframeEl && child instanceof HTMLElement) {
+            child.style.display = '';
+        }
+    });
+
+    // Removing the outermost matching iframe destroys all nested iframes too.
+    // TODO: do this after delay?
+    iframeEl.remove();
+
+    console.log(`${LOG} Ancestor partial at "${targetHref}" restored; iframe subtree removed.`);
+    return true;
+};
+
+
+/**
+ * Iframe swap (based on targetUrl)
+ * 
+ * 1. Based on target url: find a partial matching that url (prefer match in iframe)
+ * 2. Check if anywhere up the tree there is already a partial with matching data-url
+ *   - If so, delete any iframe children of that and reenable all other elements
+ * 3. If not, initialize a swap.
+ */
+
+
+export function findElementMatchingPartial(doc: Document, partial: PartialFragment): HTMLElement | null {
+    // Check top document first
+    let match: HTMLElement | null = doc.querySelector<HTMLElement>(partial.selector);
+    if (match && partial.preferTopDocMatch) return match;
+
+    // Recursively search all same-origin iframes
+    const iframes = Array.from(doc.querySelectorAll('iframe'));
+    for (const iframe of iframes) {
+        try {
+            if (iframe.contentDocument) {
+                const iframeMatch = findElementMatchingPartial(iframe.contentDocument, partial);
+                if (iframeMatch && iframeMatch.dataset.isInnerPartialElement !== 'true') {
+                    match = iframeMatch;
+                    break; // Stop at first match (like original)
+                }
+            }
+        } catch {
+            // Cross-origin iframe - skip
+        }
+    }
+
+    return match;
 }
 
-/** One entry per selector — only one swap can be in progress at a time. */
-const inFlight = new Map<string, InFlightCleanup>();
 
-/**
- * Registers a new in-flight swap for `selector`, cancelling any previous one.
- * Returns an `isCancelled` predicate the caller checks after every await.
- * @param selector - CSS selector identifying the partial
- * @param cleanup  - removes the overlay/iframe if this swap is superseded
- * @returns a function that returns true once this swap has been superseded
- */
-const registerInFlight = (
-    selector: string,
-    cleanup: () => void,
-): (() => boolean) => {
-    // Cancel and clean up any swap already running for this selector.
-    inFlight.get(selector)?.cancel();
-    inFlight.get(selector)?.cleanup();
-
-    let cancelled = false;
-    inFlight.set(selector, {
-        /** Marks this swap as superseded so in-progress awaits exit early. */
-        cancel: () => { cancelled = true; },
-        cleanup,
-    });
-    return () => cancelled;
-};
-
-/**
- * Removes the in-flight record once a swap has finished successfully.
- * @param selector - the CSS selector whose in-flight record to clear
- */
-const clearInFlight = (selector: string): void => {
-    inFlight.delete(selector);
-};
-
-// ---------------------------------------------------------------------------
-// Loading overlay
-// ---------------------------------------------------------------------------
-
-/**
- * Appends a semi-transparent barrier and a spinner to `wrapper`, set above
- * whatever iframe content is beneath them.
- * @param wrapper   - the persistent wrapper element
- * @param minHeight - minimum height to hold open while loading
- * @returns references to the barrier and spinnerWrapper elements
- */
-const addLoadingOverlay = (
-    wrapper: HTMLElement,
-    minHeight: number,
-): { barrier: HTMLDivElement; spinnerWrapper: HTMLDivElement } => {
-    wrapper.style.minHeight = `${minHeight}px`;
-
-    const ownerDoc = wrapper.ownerDocument;
-
-    const barrier = ownerDoc.createElement('div');
-    let backgroundColor = window.top!.getComputedStyle(document.body).backgroundColor;
-    backgroundColor = backgroundColor.replace(')', ',0.95)');
-    barrier.style.cssText =
-        `position:absolute;inset:0;background:${backgroundColor};z-index:1;pointer-events:none;`;
-
-    const spinnerWrapper = ownerDoc.createElement('div');
-    spinnerWrapper.style.cssText =
-        'position:absolute;top:0;left:0;right:0;display:flex;transform:translateY(8rem)' +
-        'justify-content:center;z-index:2;pointer-events:none;';
-    const spinnerEl = ownerDoc.createElement('div');
-    spinnerEl.className = 'spinner-border text-primary';
-    spinnerEl.setAttribute('role', 'status');
-    spinnerWrapper.appendChild(spinnerEl);
-
-    wrapper.appendChild(barrier);
-    wrapper.appendChild(spinnerWrapper);
-
-    return { barrier, spinnerWrapper };
-};
-
-/**
- * Fades out `barrier` and `spinnerWrapper` over 100 ms then removes them.
- * @param barrier       - the white barrier element
- * @param spinnerWrapper - the spinner container element
- */
-const fadeOutOverlay = (
-    barrier: HTMLDivElement,
-    spinnerWrapper: HTMLDivElement,
-): void => {
-    barrier.style.transition = 'opacity 100ms ease-out';
-    spinnerWrapper.style.transition = 'opacity 100ms ease-out';
-    requestAnimationFrame(() => {
-        barrier.style.opacity = '0';
-        spinnerWrapper.style.opacity = '0';
-    });
-    setTimeout(() => {
-        console.log(`${LOG} Removing barrier and spinner`);
-        barrier.remove();
-        spinnerWrapper.remove();
-    }, 110);
-};
-
-// ---------------------------------------------------------------------------
-// iframe loading & isolation
-// ---------------------------------------------------------------------------
-
-/**
- * Creates an iframe pointing at `targetUrl`, inserts it into `wrapper` behind
- * `barrier`, and resolves once the `load` event fires.
- * @param wrapper   - the wrapper to insert the iframe into
- * @param barrier   - the barrier element — iframe is inserted before this
- * @param targetUrl - the URL to load
- * @param height    - initial height for the iframe
- * @returns the iframe element, or null if loading failed
- */
-const createAndLoadIframe = async (
-    wrapper: HTMLElement,
-    barrier: HTMLDivElement,
-    targetUrl: string,
-    height: number,
-): Promise<HTMLIFrameElement | null> => {
-    const iframe = wrapper.ownerDocument.createElement('iframe');
-    iframe.style.cssText =
-        'border:0;width:100%;display:block;overflow:hidden;' +
-        `position:absolute;top:0;left:0;height:${height}px;z-index:0;`;
-    iframe.src = targetUrl;
-    // Insert behind barrier (lower DOM order = lower z-index).
-    wrapper.insertBefore(iframe, barrier);
-
-    const ok = await new Promise<boolean>(resolve => {
-        iframe.addEventListener('load', () => resolve(true), { once: true });
-        iframe.addEventListener('error', () => resolve(false), { once: true });
-    });
-
-    return ok ? iframe : null;
-};
-
-/**
- * Waits for the iframe body to stop mutating for 100 ms, indicating that
- * Moodle's AMD modules have finished their initial DOM work.
- * @param iframe - the iframe to observe
- */
-const waitForIframeStable = (iframe: HTMLIFrameElement): Promise<void> =>
-    new Promise<void>(resolve => {
-        let timer = setTimeout(resolve, 100);
-        const obs = new MutationObserver(() => {
-            clearTimeout(timer);
-            timer = setTimeout(() => {
-                obs.disconnect();
-                resolve();
-            }, 100);
-        });
-        obs.observe(iframe.contentDocument!.body, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-        });
-    });
-
-/**
- * Removes all elements from the iframe that are not `selector` or its
- * ancestors, leaving only the target subtree.
- * @param iframeDoc - the iframe's document
- * @param selector  - CSS selector identifying the partial element
- * @returns the isolated element, or null if not found
- */
-const isolateIframe = (
-    iframeDoc: Document,
-    selector: string,
-): HTMLElement | null => {
-    const partialEl = iframeDoc.querySelector<HTMLElement>(selector);
-    if (!partialEl) return null;
-
-    console.groupCollapsed(`${LOG} iframe body BEFORE isolation`);
-    Array.from(iframeDoc.body.children).forEach((child, i) => {
-        const cls = child.getAttribute('class') ?? '';
-        console.log(i, child.tagName, child.id, cls.slice(0, 60));
-    });
-    console.groupEnd();
-
-    let node: HTMLElement | null = partialEl;
-    while (node && node !== iframeDoc.body) {
-        const parent: HTMLElement | null = node.parentElement;
-        if (parent) {
-            const keep = node;
-            const before = parent.children.length;
-            Array.from(parent.children).forEach(child => {
-                // Keep the target subtree and any drawer elements — drawers are
-                // siblings of the partial in the DOM and Moodle's JS requires
-                // them to be present to initialise correctly.
-                if (child !== keep && !child.classList.contains('drawer')) {
-                    child.remove();
-                }
-            });
-            console.log(
-                `${LOG} Removed ${before - 1} sibling(s) from`,
-                parent.tagName,
-                parent.id || (parent.getAttribute('class') ?? '').slice(0, 40),
-            );
-            parent.style.cssText = 'margin:0;padding:0;';
-        }
-        node = parent;
-    }
-    iframeDoc.body.style.cssText = 'margin:0;padding:0;overflow:hidden;';
-
-    // Make all links that are not intercepted by the partial feature open in
-    // the top-level page instead of navigating the iframe itself.
-    // <base target="_top"> is the simplest way — no click listeners needed.
-    const base = iframeDoc.createElement('base');
-    base.target = '_top';
-    iframeDoc.head.appendChild(base);
-
-    console.groupCollapsed(`${LOG} iframe body AFTER isolation`);
-    Array.from(iframeDoc.body.children).forEach((child, i) => {
-        const cls = child.getAttribute('class') ?? '';
-        console.log(i, child.tagName, child.id, cls.slice(0, 60));
-    });
-    console.groupEnd();
-
-    return partialEl;
-};
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/**
- * Applies a partial swap, loading `targetUrl` in an iframe and isolating the
- * element matching `partial.selector`.
- *
- * Only one swap per selector can be in flight at a time. If a second call
- * arrives while the first is still loading, the first is cancelled and its
- * overlay/iframe are removed before the new one starts.
- * @param partial      - the partial that matched the navigation
- * @param targetUrl    - the URL the user is navigating to
- * @param pushHistory  - whether to push a new history entry (false when
- *                       called from a popstate handler where the URL is
- *                       already correct)
- * @param fromUrl      - the URL being navigated away from (for logging);
- *                       defaults to the current top-level URL if omitted
- */
-export const applyPartial = async (
-    partial: PartialFragment,
-    targetUrl: string,
-    pushHistory = true,
-): Promise<void> => {
-    const topDoc = window.top!.document;
-
-    let current: HTMLElement | null = null;
-    current ??= topDoc.querySelector<HTMLElement>(partial.selector);
-    if (!current) {
-        const iframes = Array.from(topDoc.querySelectorAll('iframe'));
-        for (const iframe of iframes) {
-            if (iframe.contentWindow?.location.origin !== window.location.origin) continue;
-
-            const el = iframe.contentDocument?.querySelector<HTMLElement>(partial.selector);
-            if (el) {
-                current = el;
-                break;
-            }
-        }
-    }
-
-    // Fallback to top document
-    if (!current) {
-        console.warn(`${LOG} Selector "${partial.selector}" not found – falling back.`);
-        window.top!.location.href = targetUrl;
-        return;
-    }
-
-    const currentHeight = current.scrollHeight;
+export async function swapPartials(partialWrapper: HTMLElement, targetPartial: PartialFragment, targetUrl: string): Promise<PartialElement | undefined> {
+    const currentHeight = partialWrapper.scrollHeight;
 
     // --- Layer new content directly inside the existing element ---
     // We mutate `current` in-place so there is never a duplicate #id in the DOM.
@@ -290,29 +140,32 @@ export const applyPartial = async (
 
     // Snapshot and hide existing children so we can remove them once the swap is done.
     // Don't remove immediately to keep possible scripts running.
-    const oldChildren = Array.from(current.children) as HTMLElement[];
+    const oldChildren = Array.from(partialWrapper.children) as HTMLElement[];
     let oldChildrenRemovalTimeoutId: NodeJS.Timeout | null = null;
     for (const child of oldChildren) {
         child.style.display = 'none';
     }
 
-    // Preserve styles we temporarily override so they can be restored on rollback.
-    const prevPosition = current.style.position;
-    const prevMinHeight = current.style.minHeight;
-    current.style.position = 'relative';
-    current.style.minHeight = `${currentHeight}px`;
 
-    const { barrier, spinnerWrapper } = addLoadingOverlay(current, currentHeight);
+    // Preserve styles we temporarily override so they can be restored on rollback.
+    const prevPosition = partialWrapper.style.position;
+    const prevMinHeight = partialWrapper.style.minHeight;
+    partialWrapper.style.position = 'relative'; // TODO: maybe this screws with loading spinner?
+    partialWrapper.style.minHeight = `${currentHeight}px`;
+
+    const { barrier, spinnerWrapper } = addLoadingOverlay(partialWrapper, currentHeight);
 
     /** Rolls back the temporary style changes and removes any added elements. */
     const rollback = (extraIframe?: HTMLIFrameElement | null): void => {
         barrier.remove();
         spinnerWrapper.remove();
         extraIframe?.remove();
-        current.style.position = prevPosition;
-        current.style.minHeight = prevMinHeight;
+        partialWrapper.style.position = prevPosition;
+        partialWrapper.style.minHeight = prevMinHeight;
+
         if (oldChildrenRemovalTimeoutId) {
             clearTimeout(oldChildrenRemovalTimeoutId);
+            console.log(`${LOG} Child removal canceled.`);
         }
     };
 
@@ -320,7 +173,7 @@ export const applyPartial = async (
     // createAndLoadIframe resolves.
     let inFlightIframe: HTMLIFrameElement | null = null;
 
-    const isCancelled = registerInFlight(partial.selector, () => {
+    const isCancelled = registerInFlight(targetPartial.selector, () => {
         rollback(inFlightIframe);
         inFlightIframe = null;
     });
@@ -329,92 +182,83 @@ export const applyPartial = async (
     window.top!.scrollTo({ top: 0, behavior: 'smooth' });
 
     console.log(`${LOG} Loading "${targetUrl}" in new iframe…`);
-    const iframe = await createAndLoadIframe(current, barrier, targetUrl, currentHeight);
+    const iframe = await createAndLoadIframe(partialWrapper, barrier, targetUrl, currentHeight);
     inFlightIframe = iframe;
 
     if (isCancelled()) {
-        console.log(`${LOG} Swap to "${targetUrl}" was superseded – aborting.`);
+        console.log(`${LOG} Swap to "${targetUrl}" was superseded - aborting.`);
         iframe?.remove();
         return;
     }
 
     if (!iframe) {
-        console.error(`${LOG} iframe failed to load – falling back.`);
+        console.error(`${LOG} iframe failed to load - falling back.`);
         rollback();
-        clearInFlight(partial.selector);
+        clearInFlight(targetPartial.selector);
         window.top!.location.href = targetUrl;
         return;
     }
+
+
 
     console.log(`${LOG} Waiting for iframe DOM to stabilise…`);
     await waitForIframeStable(iframe);
     console.log(`${LOG} iframe DOM stable, proceeding with isolation.`);
 
     if (isCancelled()) {
-        console.log(`${LOG} Swap to "${targetUrl}" was superseded after stabilisation – aborting.`);
+        console.log(`${LOG} Swap to "${targetUrl}" was superseded after stabilisation - aborting.`);
         return;
     }
 
-    const iframeDoc = iframe.contentDocument;
-    if (!iframeDoc) {
-        console.warn(`${LOG} iframe contentDocument unavailable – falling back.`);
+    const partialDoc = iframe.contentDocument;
+    if (!partialDoc) {
+        console.warn(`${LOG} iframe contentDocument unavailable - falling back.`);
         rollback(iframe);
-        clearInFlight(partial.selector);
+        clearInFlight(targetPartial.selector);
         window.top!.location.href = targetUrl;
         return;
     }
 
 
-    const partialEl = isolateIframe(iframeDoc, partial.selector);
+    const innerElement = isolateIframe(partialDoc, targetPartial.selector);
     console.log('Isolated');
-    if (!partialEl) {
-        console.warn(`${LOG} Selector "${partial.selector}" not found in iframe – falling back.`);
+    if (!innerElement) {
+        console.warn(`${LOG} Selector "${targetPartial.selector}" not found in iframe - falling back.`);
         rollback(iframe);
-        clearInFlight(partial.selector);
+        clearInFlight(targetPartial.selector);
         window.top!.location.href = targetUrl;
         return;
     }
+
+    innerElement.dataset.isInnerPartialElement = 'true';
 
     // --- Finalise ---
     console.log('entering finalize');
-    // Promote the iframe to normal flow and discard old children.
+    // Promote the iframe to normal flow.
+    // Fix (a): Only remove old children that are iframes (to free their resources);
+    // non-iframe children are kept hidden so fix (b) can restore them if an inner
+    // partial later tries to navigate back to this same URL.
     iframe.style.position = 'static';
     iframe.style.visibility = 'visible';
     oldChildrenRemovalTimeoutId = setTimeout(() => {
+        console.log(`${LOG} Marking old iframes for removal`);
+        console.log(oldChildren);
+        console.log(partialWrapper.children);
         for (const child of oldChildren) {
-            child.remove();
+            console.log(child)
+            console.log(child instanceof HTMLIFrameElement)
+            console.log(child.tagName)
+            if (child.tagName === 'IFRAME') { // instanceof doesnt work across iframes
+                console.log(`${LOG} Removing iframe ${(child as HTMLIFrameElement).src}`);
+                child.remove();
+            }
         }
     }, 200);
 
-    current.style.position = prevPosition;
-    current.style.minHeight = '';
+    partialWrapper.style.position = prevPosition;
+    partialWrapper.style.minHeight = '';
+    fadeOutOverlay(barrier, spinnerWrapper);
     console.log('finalized');
 
-    // Apply any style patches
-    for (const { selector, styles } of partial.stylePatches) {
-        const targets = [
-            ...topDoc.querySelectorAll<HTMLElement>(selector),
-            ...iframeDoc.querySelectorAll<HTMLElement>(selector)
-        ];
-
-        for (const el of targets) {
-            for (const [prop, value] of Object.entries(styles)) {
-                if (value !== undefined) el.style.setProperty(prop, value);
-            }
-        }
-    }
-
-    console.log('Style patched');
-
-    /** Syncs the wrapper/iframe height to the partial element's scrollHeight. */
-    const syncHeight = () => { iframe.style.height = `${partialEl.scrollHeight}px`; };
-    syncHeight();
-    new ResizeObserver(syncHeight).observe(partialEl);
-
-    console.log('synced');
-    clearInFlight(partial.selector);
-    if (pushHistory) window.top!.history.pushState(null, '', targetUrl);
-    fadeOutOverlay(barrier, spinnerWrapper);
-
-    console.log(`${LOG} Partial "${partial.selector}" applied successfully.`);
-};
+    return new PartialElement(partialDoc, iframe, innerElement);
+}

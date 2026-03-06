@@ -1,7 +1,9 @@
 import FeatureGroup from '@/FeatureGroup';
 import { attach, detach } from './lib/linkHandler';
 import { PartialFragment, patternToRegex } from './lib/Partial';
-import { applyPartial } from './lib/partialHandler';
+import { applyPartial } from './lib/partialManager';
+
+const LOG = '[better-moodle/partials]';
 
 /** All registered partials, checked in order on each navigation. */
 const partials: PartialFragment[] = [
@@ -56,6 +58,7 @@ const partials: PartialFragment[] = [
         stylePatches: [
             { selector: '#page:has(> iframe)', styles: { padding: '0', margin: '0' } },
         ],
+        preferTopDocMatch: true,
     }),
 ];
 
@@ -70,7 +73,7 @@ const onPopState = (): void => {
     const matched = partials.find(p => p.matches(targetUrl));
     if (!matched) return;
 
-    console.log('[better-moodle/partials] popstate → partial swap to', targetUrl);
+    console.log(`${LOG} popstate → partial swap to`, targetUrl);
     void applyPartial(matched, targetUrl, false).catch(console.error);
 };
 
@@ -81,14 +84,14 @@ export default FeatureGroup.register({
 
         if (matched.length === 0) {
             console.log(
-                '[better-moodle/partials] No partials match the current URL – skipping interception.',
+                `${LOG} No partials match the current URL - skipping interception.`,
                 currentUrl
             );
             return;
         }
 
         console.log(
-            `[better-moodle/partials] ${matched.length} partial(s) match the current URL – intercepting link clicks.`,
+            `${LOG} ${matched.length} partial(s) match the current URL - intercepting link clicks.`,
             matched.map(p => p.selector)
         );
 
