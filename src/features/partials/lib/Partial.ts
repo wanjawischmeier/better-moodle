@@ -33,6 +33,17 @@ const stripTrailingSlash = (url: string): string => {
 
 
 /**
+ * A CSS selector paired with the style properties to forcibly apply to any
+ * matching element in the top-level page when this partial is applied.
+ */
+export interface StylePatch {
+    /** CSS selector for the element(s) to patch. */
+    selector: string;
+    /** Property/value pairs to set as inline styles. */
+    styles: Partial<Record<string, string>>;
+}
+
+/**
  * Options controlling caching behaviour for a {@link PartialFragment}.
  */
 export interface PartialCacheOptions {
@@ -57,6 +68,13 @@ export interface PartialCacheOptions {
      * @param targetUrl  - the URL the user is navigating to
      */
     condition?: (currentUrl: string, targetUrl: string) => boolean;
+    /**
+     * Style patches to apply to elements in the top-level document whenever
+     * this partial is applied.  Use this to neutralise unwanted layout styles
+     * (e.g. padding / margin) on ancestor elements that would otherwise affect
+     * the partial's container.
+     */
+    stylePatches?: StylePatch[];
 }
 
 /**
@@ -76,6 +94,8 @@ export class PartialFragment {
     readonly pinUrls: RegExp[];
     /** Optional extra predicate applied on top of URL-pattern matching. */
     readonly condition: ((currentUrl: string, targetUrl: string) => boolean) | null;
+    /** Style patches applied to the top-level document on every partial swap. */
+    readonly stylePatches: StylePatch[];
 
     constructor(selector: string, urls: RegExp[], options: PartialCacheOptions = {}) {
         this.selector = selector;
@@ -83,6 +103,7 @@ export class PartialFragment {
         this.cacheSize = options.cacheSize ?? 5;
         this.pinUrls = options.pinUrls ?? [];
         this.condition = options.condition ?? null;
+        this.stylePatches = options.stylePatches ?? [];
     }
 
     /**

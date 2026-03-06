@@ -105,7 +105,7 @@ const buildClickHandler =
             `[better-moodle/partials] Applying partial "${partial.selector}":`,
             fromUrl, '->', href,
         );
-        void applyPartial(partial, href, false);
+        void applyPartial(partial, href, false).catch(console.error);
     };
 
 /**

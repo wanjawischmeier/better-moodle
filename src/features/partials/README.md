@@ -19,6 +19,9 @@
 - [ ] Bug: Load hangs when going from Kurs -> Teilnehmer -> Kurs
 - [ ] TIMEOUT! for: Loading "..." in new iframe…
 - [x] Fix white loading screen on nested iframe
+- [ ] Propagate on bg clicks through all frames to fix nav bar collapse
+- [ ] Partial fragment css patching
+
 ## Refactor
 - [ ] Move isolation ignore class list to central definition
 

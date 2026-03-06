@@ -60,7 +60,7 @@ const clearInFlight = (selector: string): void => {
  * @returns references to the barrier and spinnerWrapper elements
  */
 const addLoadingOverlay = (
-    wrapper: HTMLDivElement,
+    wrapper: HTMLElement,
     minHeight: number,
 ): { barrier: HTMLDivElement; spinnerWrapper: HTMLDivElement } => {
     wrapper.style.minHeight = `${minHeight}px`;
@@ -75,7 +75,7 @@ const addLoadingOverlay = (
 
     const spinnerWrapper = ownerDoc.createElement('div');
     spinnerWrapper.style.cssText =
-        'position:absolute;left:0;right:0;display:flex;transform:translateY(4rem);' +
+        'position:absolute;top:0;left:0;right:0;display:flex;transform:translateY(8rem)' +
         'justify-content:center;z-index:2;pointer-events:none;';
     const spinnerEl = ownerDoc.createElement('div');
     spinnerEl.className = 'spinner-border text-primary';
@@ -104,6 +104,7 @@ const fadeOutOverlay = (
         spinnerWrapper.style.opacity = '0';
     });
     setTimeout(() => {
+        console.log(`${LOG} Removing barrier and spinner`);
         barrier.remove();
         spinnerWrapper.remove();
     }, 110);
@@ -123,7 +124,7 @@ const fadeOutOverlay = (
  * @returns the iframe element, or null if loading failed
  */
 const createAndLoadIframe = async (
-    wrapper: HTMLDivElement,
+    wrapper: HTMLElement,
     barrier: HTMLDivElement,
     targetUrl: string,
     height: number,
@@ -182,7 +183,8 @@ const isolateIframe = (
 
     console.groupCollapsed(`${LOG} iframe body BEFORE isolation`);
     Array.from(iframeDoc.body.children).forEach((child, i) => {
-        console.log(i, child.tagName, child.id, child.className.slice(0, 60));
+        const cls = child.getAttribute('class') ?? '';
+        console.log(i, child.tagName, child.id, cls.slice(0, 60));
     });
     console.groupEnd();
 
@@ -203,7 +205,7 @@ const isolateIframe = (
             console.log(
                 `${LOG} Removed ${before - 1} sibling(s) from`,
                 parent.tagName,
-                parent.id || parent.className.slice(0, 40),
+                parent.id || (parent.getAttribute('class') ?? '').slice(0, 40),
             );
             parent.style.cssText = 'margin:0;padding:0;';
         }
@@ -220,7 +222,8 @@ const isolateIframe = (
 
     console.groupCollapsed(`${LOG} iframe body AFTER isolation`);
     Array.from(iframeDoc.body.children).forEach((child, i) => {
-        console.log(i, child.tagName, child.id, child.className.slice(0, 60));
+        const cls = child.getAttribute('class') ?? '';
+        console.log(i, child.tagName, child.id, cls.slice(0, 60));
     });
     console.groupEnd();
 
@@ -255,22 +258,20 @@ export const applyPartial = async (
 
     let current: HTMLElement | null = null;
     current ??= topDoc.querySelector<HTMLElement>(partial.selector);
+    if (!current) {
+        const iframes = Array.from(topDoc.querySelectorAll('iframe'));
+        for (const iframe of iframes) {
+            if (iframe.contentWindow?.location.origin !== window.location.origin) continue;
 
-    // Prioritize searching in iframes
-    // TODO: possibly seach in hierarchical order
-    const iframes = Array.from(topDoc.querySelectorAll('iframe'));
-    for (const iframe of iframes) {
-        if (iframe.contentWindow?.location.origin !== window.location.origin) continue;
-
-        const el = iframe.contentDocument?.querySelector<HTMLElement>(partial.selector);
-        if (el) {
-            current = el;
-            break;
+            const el = iframe.contentDocument?.querySelector<HTMLElement>(partial.selector);
+            if (el) {
+                current = el;
+                break;
+            }
         }
     }
 
     // Fallback to top document
-
     if (!current) {
         console.warn(`${LOG} Selector "${partial.selector}" not found – falling back.`);
         window.top!.location.href = targetUrl;
@@ -279,38 +280,56 @@ export const applyPartial = async (
 
     const currentHeight = current.scrollHeight;
 
-    // --- Build the loading wrapper ---
-    // Structure (back to front):
-    //   <div wrapper>       ← replaces current in the DOM, preserves height
-    //     <iframe/>         ← loads the target page
-    //     <div barrier/>    ← white overlay while loading
-    //     <div spinner/>    ← spinner on top
-    //   </div>
-    const wrapper = topDoc.createElement('div');
-    wrapper.id = current.id;
-    wrapper.className = current.className;
-    wrapper.style.cssText = `position:relative;width:100%;min-height:${currentHeight}px;`;
+    // --- Layer new content directly inside the existing element ---
+    // We mutate `current` in-place so there is never a duplicate #id in the DOM.
+    // Child stacking order (top → bottom):
+    //   spinnerWrapper  position:absolute  z-index:2
+    //   barrier         position:absolute  z-index:1
+    //   new iframe      position:absolute  z-index:0
+    //   old children    normal flow        (behind all positioned children)
 
-    const { barrier, spinnerWrapper } = addLoadingOverlay(wrapper, currentHeight);
+    // Snapshot and hide existing children so we can remove them once the swap is done.
+    // Don't remove immediately to keep possible scripts running.
+    const oldChildren = Array.from(current.children) as HTMLElement[];
+    let oldChildrenRemovalTimeoutId: NodeJS.Timeout | null = null;
+    for (const child of oldChildren) {
+        child.style.display = 'none';
+    }
+
+    // Preserve styles we temporarily override so they can be restored on rollback.
+    const prevPosition = current.style.position;
+    const prevMinHeight = current.style.minHeight;
+    current.style.position = 'relative';
+    current.style.minHeight = `${currentHeight}px`;
+
+    const { barrier, spinnerWrapper } = addLoadingOverlay(current, currentHeight);
+
+    /** Rolls back the temporary style changes and removes any added elements. */
+    const rollback = (extraIframe?: HTMLIFrameElement | null): void => {
+        barrier.remove();
+        spinnerWrapper.remove();
+        extraIframe?.remove();
+        current.style.position = prevPosition;
+        current.style.minHeight = prevMinHeight;
+        if (oldChildrenRemovalTimeoutId) {
+            clearTimeout(oldChildrenRemovalTimeoutId);
+        }
+    };
 
     // Declare iframe here so the cleanup closure can reference it before
     // createAndLoadIframe resolves.
     let inFlightIframe: HTMLIFrameElement | null = null;
 
     const isCancelled = registerInFlight(partial.selector, () => {
-        wrapper.remove();
-        inFlightIframe?.remove();
+        rollback(inFlightIframe);
         inFlightIframe = null;
     });
-
-    current.parentElement!.insertBefore(wrapper, current);
-    current.style.display = 'none';
 
     // Scroll the top-level page to the very top so the spinner is visible.
     window.top!.scrollTo({ top: 0, behavior: 'smooth' });
 
     console.log(`${LOG} Loading "${targetUrl}" in new iframe…`);
-    const iframe = await createAndLoadIframe(wrapper, barrier, targetUrl, currentHeight);
+    const iframe = await createAndLoadIframe(current, barrier, targetUrl, currentHeight);
     inFlightIframe = iframe;
 
     if (isCancelled()) {
@@ -321,7 +340,7 @@ export const applyPartial = async (
 
     if (!iframe) {
         console.error(`${LOG} iframe failed to load – falling back.`);
-        wrapper.replaceWith(current);
+        rollback();
         clearInFlight(partial.selector);
         window.top!.location.href = targetUrl;
         return;
@@ -339,37 +358,63 @@ export const applyPartial = async (
     const iframeDoc = iframe.contentDocument;
     if (!iframeDoc) {
         console.warn(`${LOG} iframe contentDocument unavailable – falling back.`);
-        wrapper.replaceWith(current);
+        rollback(iframe);
         clearInFlight(partial.selector);
         window.top!.location.href = targetUrl;
         return;
     }
 
+
     const partialEl = isolateIframe(iframeDoc, partial.selector);
+    console.log('Isolated');
     if (!partialEl) {
         console.warn(`${LOG} Selector "${partial.selector}" not found in iframe – falling back.`);
-        wrapper.replaceWith(current);
+        rollback(iframe);
         clearInFlight(partial.selector);
         window.top!.location.href = targetUrl;
         return;
     }
 
     // --- Finalise ---
+    console.log('entering finalize');
+    // Promote the iframe to normal flow and discard old children.
     iframe.style.position = 'static';
     iframe.style.visibility = 'visible';
-    wrapper.style.minHeight = '';
-    wrapper.style.margin = '0';
-    wrapper.style.padding = '0';
+    oldChildrenRemovalTimeoutId = setTimeout(() => {
+        for (const child of oldChildren) {
+            child.remove();
+        }
+    }, 200);
+
+    current.style.position = prevPosition;
+    current.style.minHeight = '';
+    console.log('finalized');
+
+    // Apply any style patches
+    for (const { selector, styles } of partial.stylePatches) {
+        const targets = [
+            ...topDoc.querySelectorAll<HTMLElement>(selector),
+            ...iframeDoc.querySelectorAll<HTMLElement>(selector)
+        ];
+
+        for (const el of targets) {
+            for (const [prop, value] of Object.entries(styles)) {
+                if (value !== undefined) el.style.setProperty(prop, value);
+            }
+        }
+    }
+
+    console.log('Style patched');
 
     /** Syncs the wrapper/iframe height to the partial element's scrollHeight. */
     const syncHeight = () => { iframe.style.height = `${partialEl.scrollHeight}px`; };
     syncHeight();
     new ResizeObserver(syncHeight).observe(partialEl);
 
+    console.log('synced');
     clearInFlight(partial.selector);
     if (pushHistory) window.top!.history.pushState(null, '', targetUrl);
     fadeOutOverlay(barrier, spinnerWrapper);
 
     console.log(`${LOG} Partial "${partial.selector}" applied successfully.`);
-    setTimeout(() => current.remove(), 1000);
 };

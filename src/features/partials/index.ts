@@ -52,7 +52,10 @@ const partials: PartialFragment[] = [
             patternToRegex('MOODLE_URL/my/'),
             patternToRegex('MOODLE_URL/my/courses.php'),
             patternToRegex('MOODLE_URL/course/'),
-        ]
+        ],
+        stylePatches: [
+            { selector: '#page:has(> iframe)', styles: { padding: '0', margin: '0' } },
+        ],
     }),
 ];
 
@@ -68,7 +71,7 @@ const onPopState = (): void => {
     if (!matched) return;
 
     console.log('[better-moodle/partials] popstate → partial swap to', targetUrl);
-    void applyPartial(matched, targetUrl, false);
+    void applyPartial(matched, targetUrl, false).catch(console.error);
 };
 
 export default FeatureGroup.register({
