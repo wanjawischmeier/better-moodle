@@ -17,12 +17,34 @@ function applyStylePatches(topDoc: Document, childDoc: Document, partial: Partia
 
         for (const el of targets) {
             for (const [prop, value] of Object.entries(styles)) {
-                if (value !== undefined) el.style.setProperty(prop, value);
+                if (value === undefined) continue;
+
+                // Store old value and keep new value
+                el.dataset[prop] = el.style.getPropertyValue(prop);
+                el.style.setProperty(prop, value);
             }
         }
     }
 
     console.log(`${LOG} Partial styles patched`);
+}
+
+export function restorePrePatchStyles(partial: PartialFragment, el: HTMLElement) {
+    if (!partial.spec.stylePatches) return;
+    console.log('restoring styles')
+    for (const { selector, styles } of partial.spec.stylePatches) {
+            console.log(`trying ${selector}`)
+            if (!el.matches(selector)) continue;
+            console.log('match')
+            for (const prop of Object.keys(styles)) {
+                const style = el.dataset[prop];
+                console.log(`${prop}: ${style} (${style === undefined})`)
+                if (style === undefined) continue;
+                console.log(`applying`)
+                el.style.setProperty(prop, style);
+                delete el.dataset[prop];
+            }
+    }
 }
 
 /**
@@ -52,7 +74,13 @@ export const applyPartial = async (
     }
 
     const topDoc = window.top.document;
-    if (restoreMatchingOuterPartial(targetUrl)) return;
+    if (restoreMatchingOuterPartial(partial, targetUrl)) {
+        if (pushHistory) {
+            window.top.history.pushState(null, '', targetUrl);
+        }
+
+        return;
+    }
 
     // Find an element matching the partial selector (prefer match in iframe)
     const partialWrapper = findElementMatchingPartial(topDoc, partial);
@@ -62,7 +90,17 @@ export const applyPartial = async (
         return;
     }
 
-    const partialElement = await swapPartials(partialWrapper, partial, targetUrl);
+    const sourceUrl = partialWrapper.ownerDocument.location.href;
+    console.log(
+        `${LOG} Applying partial "${partial.spec.selector}":`,
+        sourceUrl, '->', targetUrl,
+    );
+
+    if (pushHistory) {
+        window.top.history.pushState(null, '', targetUrl);
+    }
+
+    const partialElement = await swapPartials(partialWrapper, partial, sourceUrl, targetUrl);
     if (!partialElement) {
         console.error(`${LOG} Failed to swap partials - falling back.`);
         window.top.location.href = targetUrl;
@@ -80,7 +118,6 @@ export const applyPartial = async (
 
     console.log('synced');
     clearInFlight(partial.spec.selector);
-    if (pushHistory) window.top.history.pushState(null, '', targetUrl);
 
     console.log(`${LOG} Partial "${partial.spec.selector}" applied successfully.`);
 };

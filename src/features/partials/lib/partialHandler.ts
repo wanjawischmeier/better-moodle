@@ -1,7 +1,8 @@
 import { createAndLoadIframe, isolateIframe, waitForIframeStable } from "./iframeHandler";
 import { clearInFlight, registerInFlight } from "./inFlight";
-import { addLoadingOverlay, fadeOutOverlay } from "./loadingOverlay";
+import { addLoadingOverlay, removeAllLoadingOverlays } from "./loadingOverlay";
 import { PartialElement, PartialFragment } from "./Partial";
+import { restorePrePatchStyles } from "./partialManager";
 
 const LOG = '[better-moodle/partials/partialHandler]';
 
@@ -11,81 +12,81 @@ const LOG = '[better-moodle/partials/partialHandler]';
 
 /**
  * Walks the iframe ancestor chain to find the **outermost** ancestor window
- * whose URL already equals `targetUrl`.  When found, the wrapper element of
- * that ancestor's `<iframe>` has its hidden original children restored and the
- * `<iframe>` itself is removed — which cascades and destroys all inner iframes,
+ * whose document contains a partial element matching `partial.spec.selector`
+ * with `dataset.partialUrl` equal to `targetUrl`.  When found, the hidden
+ * original children of that wrapper are restored and any partial iframes
+ * inside it are removed — which cascades and destroys all nested iframes,
  * including the current one.
  *
  * This prevents the browser from blocking a nested iframe that would otherwise
- * have the same `src` as one of its ancestors.
+ * navigate to the same URL as one of its ancestor partials.
  *
- * Pairs iterated (childWin → parentWin):
- *   (window,              window.parent)
- *   (window.parent,       window.parent.parent)
- *   …
- * The outermost (last) matching pair is used so the minimal subtree is torn
+ * Windows iterated (innermost → outermost):
+ *   window.parent
+ *   window.parent.parent
+ *   …  window.top
+ * The outermost (last) matching window is used so the minimal subtree is torn
  * down.
+ * @param partial   - the partial whose selector identifies candidate wrappers
  * @param targetUrl - the URL being navigated to
  * @returns `true` if an ancestor match was found and handled
  */
-export function restoreMatchingOuterPartial(targetUrl: string): boolean {
-    if (window === window.top) return false;
-
+export function restoreMatchingOuterPartial(partial: PartialFragment, targetUrl: string): boolean {
     let targetHref: string;
     try {
         targetHref = new URL(targetUrl, window.location.href).href;
     } catch {
         return false;
     }
+    console.log(`Target href: ${targetHref}`)
+    let outermost: HTMLElement | null = null;
 
-    let outermost: { iframeEl: HTMLIFrameElement; wrapper: HTMLElement } | null = null;
-
-    // Walk from the current window up to (but not including) window.top.
-    // childWin is the window whose src we test; parentWin owns the <iframe> element.
-    let childWin: Window = window;
-    let parentWin: Window = window.parent;
-
-    while (childWin !== window.top) {
+    // Walk from window.parent up to window.top, querying each document for a
+    // partial wrapper whose dataset.partialUrl matches the target URL.
+    let ancestorWin: Window = window.parent;
+    while (true) {
         try {
-            const childHref = new URL(childWin.location.href).href;
-            if (childHref !== targetHref) {
-                childWin = parentWin;
-                parentWin = parentWin.parent;
-                continue;
+            const match = ancestorWin.document.querySelector<HTMLElement>(partial.spec.selector);
+            console.log(`Match, target: ${targetHref}, target url = ${targetUrl}`)
+            console.log(match)
+            console.log(match?.dataset.partialUrl)
+            console.log(match?.dataset.partialUrl === targetHref)
+            if (match?.dataset.partialUrl === targetHref) {
+                // Keep updating so we end up with the outermost (last) match.
+                outermost = match;
             }
         } catch {
             // Cross-origin ancestor — stop walking.
             break;
         }
 
-        const capturedChild = childWin;
-        const iframeEl = Array.from(
-            parentWin.document.querySelectorAll<HTMLIFrameElement>('iframe'),
-        ).find(el => el.contentWindow === capturedChild);
-
-        if (iframeEl?.parentElement instanceof HTMLElement) {
-            // Keep updating so we end up with the outermost (last) match.
-            outermost = { iframeEl, wrapper: iframeEl.parentElement };
-        }
-
-        childWin = parentWin;
-        parentWin = parentWin.parent;
+        if (ancestorWin === window.top) break;
+        ancestorWin = ancestorWin.parent;
     }
 
     if (!outermost) return false;
 
-    const { iframeEl, wrapper } = outermost;
+    const wrapper = outermost;
+    console.log('Outmost wrapper found')
+    console.log(wrapper)
+    
+    delete wrapper.dataset.partialUrl;
+    restorePrePatchStyles(partial, wrapper);
 
-    // Un-hide the original children that were preserved by fix (a).
-    Array.from(wrapper.children).forEach(child => {
-        if (child !== iframeEl && child instanceof HTMLElement) {
-            child.style.display = '';
+    // Snapshot children before mutating the DOM.
+    const children = Array.from(wrapper.children) as HTMLElement[];
+
+    // Un-hide the original children that were preserved by fix (a),
+    // and remove any partial iframes (destroys all nested iframes too).
+    for (const child of children) {
+        if (child.dataset.isPartialIframe === 'true') {
+            child.remove();
+        } else {
+            child.style.display = child.dataset.display ?? '';
         }
-    });
+    }
 
-    // Removing the outermost matching iframe destroys all nested iframes too.
-    // TODO: do this after delay?
-    iframeEl.remove();
+    removeAllLoadingOverlays(wrapper.ownerDocument);
 
     console.log(`${LOG} Ancestor partial at "${targetHref}" restored; iframe subtree removed.`);
     return true;
@@ -127,7 +128,12 @@ export function findElementMatchingPartial(doc: Document, partial: PartialFragme
 }
 
 
-export async function swapPartials(partialWrapper: HTMLElement, targetPartial: PartialFragment, targetUrl: string): Promise<PartialElement | undefined> {
+export async function swapPartials(partialWrapper: HTMLElement, targetPartial: PartialFragment, sourceUrl: string, targetUrl: string): Promise<PartialElement | undefined> {
+    if (!window.top) {
+        console.error(`${LOG} Failed to swap partials - top window not defined`);
+        return;
+    }
+    
     const currentHeight = partialWrapper.scrollHeight;
 
     // --- Layer new content directly inside the existing element ---
@@ -141,19 +147,24 @@ export async function swapPartials(partialWrapper: HTMLElement, targetPartial: P
     // Snapshot and hide existing children
     const oldChildren = Array.from(partialWrapper.children) as HTMLElement[];
     let oldIframeRemovalTimeoutId: NodeJS.Timeout | null = null;
-    for (const child of oldChildren) {
-        child.style.display = 'none';
-    }
+    if (!partialWrapper.dataset.partialUrl) {
+        // Remember url for existing children
+        partialWrapper.dataset.partialUrl = sourceUrl;
 
-    // Remember url for existing children
-    partialWrapper.dataset.partialUrl = partialWrapper.ownerDocument.location.href;
+        for (const child of oldChildren) {
+            child.dataset.display = child.style.display;
+            child.style.display = 'none';
+        }
+    }
 
 
     // Preserve styles we temporarily override so they can be restored on rollback.
     const prevPosition = partialWrapper.style.position;
     const prevMinHeight = partialWrapper.style.minHeight;
-    partialWrapper.style.position = 'relative'; // TODO: maybe this screws with loading spinner?
+    partialWrapper.style.position = 'relative';
     partialWrapper.style.minHeight = `${currentHeight}px`;
+    const oldWrapperMargin = partialWrapper.style.margin;
+    partialWrapper.style.margin = ''; // Clear margin for loading screen
 
     const { barrier, spinnerWrapper } = addLoadingOverlay(partialWrapper, currentHeight);
 
@@ -181,7 +192,7 @@ export async function swapPartials(partialWrapper: HTMLElement, targetPartial: P
     });
 
     // Scroll the top-level page to the very top so the spinner is visible.
-    window.top!.scrollTo({ top: 0, behavior: 'smooth' });
+    window.top.scrollTo({ top: 0, behavior: 'smooth' });
 
     console.log(`${LOG} Loading "${targetUrl}" in new iframe…`);
     partialIframe = await createAndLoadIframe(partialWrapper, barrier, targetUrl, currentHeight);
@@ -196,7 +207,7 @@ export async function swapPartials(partialWrapper: HTMLElement, targetPartial: P
         console.error(`${LOG} iframe failed to load - falling back.`);
         rollback();
         clearInFlight(targetPartial.spec.selector);
-        window.top!.location.href = targetUrl;
+        window.top.location.href = targetUrl;
         return;
     }
 
@@ -211,23 +222,23 @@ export async function swapPartials(partialWrapper: HTMLElement, targetPartial: P
         return;
     }
 
-    const partialDoc = partialIframe.contentDocument;
-    if (!partialDoc) {
+    const iframeDoc = partialIframe.contentDocument;
+    if (!iframeDoc) {
         console.warn(`${LOG} iframe contentDocument unavailable - falling back.`);
         rollback(partialIframe);
         clearInFlight(targetPartial.spec.selector);
-        window.top!.location.href = targetUrl;
+        window.top.location.href = targetUrl;
         return;
     }
 
 
-    const innerElement = isolateIframe(partialDoc, targetPartial.spec.selector);
+    const innerElement = isolateIframe(iframeDoc, targetPartial.spec.selector);
     console.log('Isolated');
     if (!innerElement) {
         console.warn(`${LOG} Selector "${targetPartial.spec.selector}" not found in iframe - falling back.`);
         rollback(partialIframe);
         clearInFlight(targetPartial.spec.selector);
-        window.top!.location.href = targetUrl;
+        window.top.location.href = targetUrl;
         return;
     }
 
@@ -258,8 +269,9 @@ export async function swapPartials(partialWrapper: HTMLElement, targetPartial: P
 
     partialWrapper.style.position = prevPosition;
     partialWrapper.style.minHeight = '';
-    fadeOutOverlay(barrier, spinnerWrapper);
+    partialWrapper.style.margin = oldWrapperMargin;
+    removeAllLoadingOverlays(partialWrapper.ownerDocument);
     console.log('finalized');
 
-    return new PartialElement(partialDoc, partialIframe, innerElement);
+    return new PartialElement(iframeDoc, partialIframe, innerElement);
 }

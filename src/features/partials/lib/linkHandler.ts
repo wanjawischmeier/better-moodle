@@ -1,6 +1,8 @@
 import { PartialFragment } from './Partial';
 import { applyPartial } from './partialManager';
 
+const LOG = '[better-moodle/partials/linkHandler]';
+
 /** Border longhand properties that drive the active-tab underline. */
 const BORDER_PROPS = [
     'border-bottom-color',
@@ -50,63 +52,59 @@ const findMatchingPartial = (
  */
 const buildClickHandler =
     (partials: PartialFragment[]) =>
-    (event: MouseEvent): void => {
-        // Let the browser handle new-tab intents (Ctrl / Meta / middle-click).
-        if (
-            event.ctrlKey ||
-            event.metaKey ||
-            event.shiftKey ||
-            event.button !== 0
-        ) {
-            return;
-        }
+        (event: MouseEvent): void => {
+            if (!window.top) {
+                console.error(`${LOG} Failed to run click handler: top window undefined.`);
+                return;
+            }
 
-        if (!(event.target instanceof Element)) return;
+            // Let the browser handle new-tab intents (Ctrl / Meta / middle-click).
+            if (
+                event.ctrlKey ||
+                event.metaKey ||
+                event.shiftKey ||
+                event.button !== 0
+            ) {
+                return;
+            }
 
-        const link = event.target.closest<HTMLAnchorElement>('a[href]');
-        if (!link) return;
+            if (!(event.target instanceof Element)) return;
 
-        // Respect explicit `target` attributes that would open a different context.
-        if (link.target && link.target !== '_self') return;
+            const link = event.target.closest<HTMLAnchorElement>('a[href]');
+            if (!link) return;
 
-        const href = link.href;
-        if (!href || href.startsWith('javascript:') || href === '#') return;
+            // Respect explicit `target` attributes that would open a different context.
+            if (link.target && link.target !== '_self') return;
 
-        // Skip in-page anchor navigation (same origin, path and search — only hash differs).
-        const targetParsed = new URL(href);
-        const topLocation = window.top!.location;
-        if (
-            targetParsed.origin === topLocation.origin &&
-            targetParsed.pathname === topLocation.pathname &&
-            targetParsed.search === topLocation.search
-        ) {
-            return;
-        }
+            const href = link.href;
+            if (!href || href.startsWith('javascript:') || href === '#') return;
 
-        const partial = findMatchingPartial(partials, topLocation.href, href);
-        if (!partial) {
-            console.log(
-                '[better-moodle/partials] Link click not intercepted (no matching partial):',
-                href
-            );
-            return;
-        }
+            // Skip in-page anchor navigation (same origin, path and search — only hash differs).
+            const targetParsed = new URL(href);
+            const topLocation = window.top.location;
+            if (
+                targetParsed.origin === topLocation.origin &&
+                targetParsed.pathname === topLocation.pathname &&
+                targetParsed.search === topLocation.search
+            ) {
+                return;
+            }
 
-        event.preventDefault();
-        link.blur();
+            const partial = findMatchingPartial(partials, topLocation.href, href);
+            if (!partial) {
+                console.log(
+                    `${LOG} Link click not intercepted (no matching partial):`,
+                    href
+                );
+                return;
+            }
 
-        // Capture the current URL before pushState changes it.
-        const fromUrl = topLocation.href;
-        // Update URL and nav state immediately on click, before the swap loads.
-        window.top!.history.pushState(null, '', href);
-        updateNavActiveState(href);
-        
-        console.log(
-            `[better-moodle/partials] Applying partial "${partial.spec.selector}":`,
-            fromUrl, '->', href,
-        );
-        void applyPartial(partial, href, false).catch(console.error);
-    };
+            event.preventDefault();
+            link.blur();
+
+            updateNavActiveState(href);
+            void applyPartial(partial, href).catch(console.error);
+        };
 
 /**
  * Updates the active state of navbar links in the host page to reflect the
@@ -178,6 +176,6 @@ export const detach = (): void => {
     document.removeEventListener('click', clickHandler);
     clickHandler = null;
     console.log(
-        '[better-moodle/partials] Click interception removed (feature unloaded).'
+        `${LOG} Click interception removed (feature unloaded).`
     );
 };

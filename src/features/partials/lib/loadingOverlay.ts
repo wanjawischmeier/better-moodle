@@ -1,4 +1,8 @@
 const LOG = '[better-moodle/partials/loadingOverlay]';
+const barrierClassName = 'partial-loading-barrier';
+const spinnerClassName = 'partial-loading-spinner';
+
+const fadeOutTransitionMs = 200;
 
 /**
  * Appends a semi-transparent barrier and a spinner to `wrapper`, set above
@@ -16,12 +20,14 @@ export const addLoadingOverlay = (
     const ownerDoc = wrapper.ownerDocument;
 
     const barrier = ownerDoc.createElement('div');
+    barrier.classList.add(barrierClassName);
     let backgroundColor = window.top!.getComputedStyle(document.body).backgroundColor;
     backgroundColor = backgroundColor.replace(')', ',0.95)');
     barrier.style.cssText =
         `position:absolute;inset:0;background:${backgroundColor};z-index:1;pointer-events:none;`;
 
     const spinnerWrapper = ownerDoc.createElement('div');
+    spinnerWrapper.classList.add(spinnerClassName);
     spinnerWrapper.style.cssText =
         'position:absolute;top:0;left:0;right:0;display:flex;transform:translateY(8rem)' +
         'justify-content:center;z-index:2;pointer-events:none;';
@@ -36,24 +42,30 @@ export const addLoadingOverlay = (
     return { barrier, spinnerWrapper };
 };
 
-/**
- * Fades out `barrier` and `spinnerWrapper` over 100 ms then removes them.
- * @param barrier       - the white barrier element
- * @param spinnerWrapper - the spinner container element
- */
-export const fadeOutOverlay = (
-    barrier: HTMLDivElement,
-    spinnerWrapper: HTMLDivElement,
-): void => {
-    barrier.style.transition = 'opacity 100ms ease-out';
-    spinnerWrapper.style.transition = 'opacity 100ms ease-out';
-    requestAnimationFrame(() => {
-        barrier.style.opacity = '0';
-        spinnerWrapper.style.opacity = '0';
-    });
-    setTimeout(() => {
-        console.log(`${LOG} Removing barrier and spinner`);
-        barrier.remove();
+export function removeAllLoadingOverlays(doc: Document) {
+    const barriers = doc.querySelectorAll<HTMLDivElement>(`.${barrierClassName}`);
+    const spinners = doc.querySelectorAll<HTMLDivElement>(`.${spinnerClassName}`);
+
+    console.log('barriers + spinners')
+    console.log(barriers)
+    console.log(spinners)
+
+    for (const barrier of barriers) {
+        barrier.style.transition = `opacity ${fadeOutTransitionMs}ms ease-out`;
+        requestAnimationFrame(() => {
+            barrier.style.opacity = '0';
+        });
+    }
+
+    console.log(`${LOG} Removing spinners`);
+    for (const spinnerWrapper of spinners) {
         spinnerWrapper.remove();
-    }, 110);
-};
+    }
+
+    setTimeout(() => {
+        console.log(`${LOG} Removing barriers`);
+        for (const barrier of barriers) {
+            barrier.remove();
+        }
+    }, fadeOutTransitionMs + 10);
+}

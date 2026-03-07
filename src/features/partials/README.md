@@ -23,8 +23,10 @@
 - [ ] Partial fragment css patching
 - [x] Remove url pinning logic
 - [x] mark iframes with a class (to not accidentally remove iframes from smth else)
-- [ ] Fix: Hide spinner immediately to avoid glitch during fade out
+- [x] Fix: Hide spinner immediately to avoid glitch during fade out
 - [x] Split up handler
+- [x] Bug: Identify loading elements with class names and always remove fade them all out
+- [ ] Bug: Cancelled partial swap not working
 
 ## Refactor
 - [ ] Move isolation ignore class list to central definition
