@@ -19,8 +19,8 @@ function applyStylePatches(topDoc: Document, childDoc: Document, partial: Partia
             for (const [prop, value] of Object.entries(styles)) {
                 if (value === undefined) continue;
 
-                // Store old value and keep new value
-                el.dataset[prop] = el.style.getPropertyValue(prop);
+                // Store original value and keep new value
+                el.dataset[prop] ??= el.style.getPropertyValue(prop);
                 el.style.setProperty(prop, value);
             }
         }

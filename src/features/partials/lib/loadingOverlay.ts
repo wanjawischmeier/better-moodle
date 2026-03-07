@@ -2,7 +2,7 @@ const LOG = '[better-moodle/partials/loadingOverlay]';
 const barrierClassName = 'partial-loading-barrier';
 const spinnerClassName = 'partial-loading-spinner';
 
-const fadeOutTransitionMs = 200;
+export const fadeOutTransitionMs = 200;
 
 /**
  * Appends a semi-transparent barrier and a spinner to `wrapper`, set above
@@ -29,8 +29,7 @@ export const addLoadingOverlay = (
     const spinnerWrapper = ownerDoc.createElement('div');
     spinnerWrapper.classList.add(spinnerClassName);
     spinnerWrapper.style.cssText =
-        'position:absolute;top:0;left:0;right:0;display:flex;transform:translateY(8rem)' +
-        'justify-content:center;z-index:2;pointer-events:none;';
+        'position:absolute;top:4rem;display:flex;align-self:center;justify-self:center;z-index:2;pointer-events:none;';
     const spinnerEl = ownerDoc.createElement('div');
     spinnerEl.className = 'spinner-border text-primary';
     spinnerEl.setAttribute('role', 'status');

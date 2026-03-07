@@ -1,6 +1,6 @@
 import { createAndLoadIframe, isolateIframe, waitForIframeStable } from "./iframeHandler";
 import { clearInFlight, registerInFlight } from "./inFlight";
-import { addLoadingOverlay, removeAllLoadingOverlays } from "./loadingOverlay";
+import { addLoadingOverlay, fadeOutTransitionMs, removeAllLoadingOverlays } from "./loadingOverlay";
 import { PartialElement, PartialFragment } from "./Partial";
 import { restorePrePatchStyles } from "./partialManager";
 
@@ -69,7 +69,7 @@ export function restoreMatchingOuterPartial(partial: PartialFragment, targetUrl:
     const wrapper = outermost;
     console.log('Outmost wrapper found')
     console.log(wrapper)
-    
+
     delete wrapper.dataset.partialUrl;
     restorePrePatchStyles(partial, wrapper);
 
@@ -133,7 +133,7 @@ export async function swapPartials(partialWrapper: HTMLElement, targetPartial: P
         console.error(`${LOG} Failed to swap partials - top window not defined`);
         return;
     }
-    
+
     const currentHeight = partialWrapper.scrollHeight;
 
     // --- Layer new content directly inside the existing element ---
@@ -252,20 +252,20 @@ export async function swapPartials(partialWrapper: HTMLElement, targetPartial: P
     // partial later tries to navigate back to this same URL.
     partialIframe.style.position = 'static';
     partialIframe.style.visibility = 'visible';
+    for (const child of oldChildren) {
+        if (child.dataset.isPartialIframe === 'true') {
+            child.style.display = 'none'; // Just hide to ensure swaps run to completion
+        }
+    }
+    
     oldIframeRemovalTimeoutId = setTimeout(() => {
-        console.log(`${LOG} Marking old iframes for removal`);
-        console.log(oldChildren);
-        console.log(partialWrapper.children);
         for (const child of oldChildren) {
-            console.log(child)
-            console.log(child.dataset)
-            console.log(child.tagName)
-            if (child.dataset.isPartialIframe === 'true') { // instanceof doesnt work across iframes
+            if (child.dataset.isPartialIframe === 'true') {
                 console.log(`${LOG} Removing partial iframe ${(child as HTMLIFrameElement).src}`);
                 child.remove();
             }
         }
-    }, 200);
+    }, fadeOutTransitionMs + 100);
 
     partialWrapper.style.position = prevPosition;
     partialWrapper.style.minHeight = '';
