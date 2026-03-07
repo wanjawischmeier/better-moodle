@@ -43,40 +43,18 @@ export interface StylePatch {
     styles: Partial<Record<string, string>>;
 }
 
-/**
- * Options controlling caching behaviour for a {@link PartialFragment}.
- */
-export interface PartialCacheOptions {
-    /**
-     * Maximum number of iframes to keep in the cache for this partial.
-     * When the limit is reached the oldest non-pinned entry is evicted.
-     * @default 5
-     */
-    cacheSize?: number;
-    /**
-     * URL patterns whose iframes are never evicted from the cache (they still
-     * count towards `cacheSize`).  Use the same `MOODLE_URL/*` syntax as the
-     * navigation URL list.
-     */
-    pinUrls?: RegExp[];
-    /**
-     * Optional extra predicate evaluated after URL-pattern matching.
-     * Both `currentUrl` and `targetUrl` match the URL list when this is called.
-     * Return `false` to refuse the partial swap and fall through to the next
-     * partial (or a full navigation).
-     * @param currentUrl - the URL the user is navigating from
-     * @param targetUrl  - the URL the user is navigating to
-     */
-    condition?: (currentUrl: string, targetUrl: string) => boolean;
-    /**
-     * Style patches to apply to elements in the top-level document whenever
-     * this partial is applied.  Use this to neutralise unwanted layout styles
-     * (e.g. padding / margin) on ancestor elements that would otherwise affect
-     * the partial's container.
-     */
+type PartialMatchingCondition = ((currentUrl: string, targetUrl: string) => boolean);
+
+export interface PartialSpecification {
+    /** CSS selector for the element that this partial controls */
+    selector: string;
+    /** URL patterns that this partial is active for */
+    urls: RegExp[];
+    /** Optional extra predicate applied on top of URL-pattern matching. */
+    condition?: PartialMatchingCondition;
+    /** Style patches applied to the top-level document on every partial swap. */
     stylePatches?: StylePatch[];
-    
-    readonly preferTopDocMatch?: boolean;
+    preferTopDocMatch?: boolean; // TODO: Remove in favor of more robust logic
 }
 
 /**
@@ -86,28 +64,10 @@ export interface PartialCacheOptions {
  * page reload.
  */
 export class PartialFragment {
-    /** CSS selector for the element that this partial controls */
-    readonly selector: string;
-    /** URL patterns that this partial is active for */
-    readonly urls: RegExp[];
-    /** Maximum number of iframes kept in the cache for this partial. */
-    readonly cacheSize: number;
-    /** URL patterns whose cached iframes are never evicted. */
-    readonly pinUrls: RegExp[];
-    /** Optional extra predicate applied on top of URL-pattern matching. */
-    readonly condition: ((currentUrl: string, targetUrl: string) => boolean) | null;
-    /** Style patches applied to the top-level document on every partial swap. */
-    readonly stylePatches: StylePatch[];
-    readonly preferTopDocMatch: boolean;
+    readonly spec: PartialSpecification;
 
-    constructor(selector: string, urls: RegExp[], options: PartialCacheOptions = {}) {
-        this.selector = selector;
-        this.urls = urls;
-        this.cacheSize = options.cacheSize ?? 5;
-        this.pinUrls = options.pinUrls ?? [];
-        this.condition = options.condition ?? null;
-        this.stylePatches = options.stylePatches ?? [];
-        this.preferTopDocMatch = options.preferTopDocMatch ?? false;
+    constructor(spec: PartialSpecification) {
+        this.spec = spec;
     }
 
     /**
@@ -115,7 +75,7 @@ export class PartialFragment {
      * @param url - the URL to test
      */
     matches(url: string): boolean {
-        return this.urls.some(pattern => pattern.test(stripTrailingSlash(url)));
+        return this.spec.urls.some(pattern => pattern.test(stripTrailingSlash(url)));
     }
 
     /**
@@ -127,16 +87,8 @@ export class PartialFragment {
         return (
             this.matches(currentUrl) &&
             this.matches(targetUrl) &&
-            (this.condition === null || this.condition(currentUrl, targetUrl))
+            (this.spec.condition === undefined || this.spec.condition(currentUrl, targetUrl))
         );
-    }
-
-    /**
-     * Returns true if the given URL should be pinned in the cache.
-     * @param url - the URL to test
-     */
-    isPinned(url: string): boolean {
-        return this.pinUrls.some(pattern => pattern.test(stripTrailingSlash(url)));
     }
 }
 

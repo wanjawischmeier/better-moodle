@@ -6,8 +6,10 @@ const LOG = '[better-moodle/partials/partialManager]';
 
 
 function applyStylePatches(topDoc: Document, childDoc: Document, partial: PartialFragment) {
+    if (!partial.spec.stylePatches) return;
+
     // TODO: apply from child doc up recursively
-    for (const { selector, styles } of partial.stylePatches) {
+    for (const { selector, styles } of partial.spec.stylePatches) {
         const targets = [
             ...topDoc.querySelectorAll<HTMLElement>(selector),
             ...childDoc.querySelectorAll<HTMLElement>(selector)
@@ -55,7 +57,7 @@ export const applyPartial = async (
     // Find an element matching the partial selector (prefer match in iframe)
     const partialWrapper = findElementMatchingPartial(topDoc, partial);
     if (!partialWrapper) {
-        console.warn(`${LOG} Selector "${partial.selector}" not found - falling back.`);
+        console.warn(`${LOG} Selector "${partial.spec.selector}" not found - falling back.`);
         window.top.location.href = targetUrl;
         return;
     }
@@ -77,8 +79,8 @@ export const applyPartial = async (
     new ResizeObserver(syncHeight).observe(innerElement);
 
     console.log('synced');
-    clearInFlight(partial.selector);
+    clearInFlight(partial.spec.selector);
     if (pushHistory) window.top.history.pushState(null, '', targetUrl);
 
-    console.log(`${LOG} Partial "${partial.selector}" applied successfully.`);
+    console.log(`${LOG} Partial "${partial.spec.selector}" applied successfully.`);
 };

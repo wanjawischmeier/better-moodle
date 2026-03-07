@@ -8,12 +8,14 @@ const LOG = '[better-moodle/partials]';
 /** All registered partials, checked in order on each navigation. */
 const partials: PartialFragment[] = [
     // All course pages with a content section
-    new PartialFragment('#page-content', [
-        patternToRegex('MOODLE_URL/course/view.php?id=*'),
-        patternToRegex('MOODLE_URL/user/index.php?id=*'),
-        patternToRegex('MOODLE_URL/user/view.php?id=*&course=*'),
-        patternToRegex('MOODLE_URL/grade/report/index.php?id=*'),
-    ], {
+    new PartialFragment({
+        selector: '#page-content',
+        urls: [
+            patternToRegex('MOODLE_URL/course/view.php?id=*'),
+            patternToRegex('MOODLE_URL/user/index.php?id=*'),
+            patternToRegex('MOODLE_URL/user/view.php?id=*&course=*'),
+            patternToRegex('MOODLE_URL/grade/report/index.php?id=*'),
+        ],
         condition: (currentUrl: string, targetUrl: string) => {
             const currentUrlObj = new URL(currentUrl);
             const targetUrlObj = new URL(targetUrl);
@@ -28,32 +30,30 @@ const partials: PartialFragment[] = [
                 currentCourse === targetId
             );
         },
-    }),
+    }
+    ),
 
     // All pages with the main header
-    new PartialFragment('#page', [
-        patternToRegex('MOODLE_URL/my/'),
-        patternToRegex('MOODLE_URL/my/*'),
-        patternToRegex('MOODLE_URL/course/'),
-        patternToRegex('MOODLE_URL/course/view.php?*'),
-        patternToRegex('MOODLE_URL/course/section.php?*'),
-        patternToRegex('MOODLE_URL/course/index.php?*'),
-        patternToRegex('MOODLE_URL/user/index.php?*'),
-        patternToRegex('MOODLE_URL/grade/report/index.php?*'),
-        patternToRegex('MOODLE_URL/message/*'),
-        patternToRegex('MOODLE_URL/calendar/*'),
-        patternToRegex('MOODLE_URL/user/files.php'),
-        patternToRegex('MOODLE_URL/user/preferences.php'),
-        patternToRegex('MOODLE_URL/reportbuilder/index.php'),
-        patternToRegex('MOODLE_URL/mod/forum/*'),
-        patternToRegex('MOODLE_URL/mod/quiz/*'),
-        patternToRegex('MOODLE_URL/mod/assign/*'),
-        patternToRegex('MOODLE_URL/mod/choicegroup/*'),
-    ], {
-        pinUrls: [
+    new PartialFragment({
+        selector: '#page',
+        urls: [
             patternToRegex('MOODLE_URL/my/'),
-            patternToRegex('MOODLE_URL/my/courses.php'),
+            patternToRegex('MOODLE_URL/my/*'),
             patternToRegex('MOODLE_URL/course/'),
+            patternToRegex('MOODLE_URL/course/view.php?*'),
+            patternToRegex('MOODLE_URL/course/section.php?*'),
+            patternToRegex('MOODLE_URL/course/index.php?*'),
+            patternToRegex('MOODLE_URL/user/index.php?*'),
+            patternToRegex('MOODLE_URL/grade/report/index.php?*'),
+            patternToRegex('MOODLE_URL/message/*'),
+            patternToRegex('MOODLE_URL/calendar/*'),
+            patternToRegex('MOODLE_URL/user/files.php'),
+            patternToRegex('MOODLE_URL/user/preferences.php'),
+            patternToRegex('MOODLE_URL/reportbuilder/index.php'),
+            patternToRegex('MOODLE_URL/mod/forum/*'),
+            patternToRegex('MOODLE_URL/mod/quiz/*'),
+            patternToRegex('MOODLE_URL/mod/assign/*'),
+            patternToRegex('MOODLE_URL/mod/choicegroup/*'),
         ],
         stylePatches: [
             { selector: '#page:has(> iframe)', styles: { padding: '0', margin: '0' } },
@@ -92,7 +92,7 @@ export default FeatureGroup.register({
 
         console.log(
             `${LOG} ${matched.length} partial(s) match the current URL - intercepting link clicks.`,
-            matched.map(p => p.selector)
+            matched.map(p => p.spec.selector)
         );
 
         attach(partials);

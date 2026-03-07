@@ -104,8 +104,8 @@ export function restoreMatchingOuterPartial(targetUrl: string): boolean {
 
 export function findElementMatchingPartial(doc: Document, partial: PartialFragment): HTMLElement | null {
     // Check top document first
-    let match: HTMLElement | null = doc.querySelector<HTMLElement>(partial.selector);
-    if (match && partial.preferTopDocMatch) return match;
+    let match: HTMLElement | null = doc.querySelector<HTMLElement>(partial.spec.selector);
+    if (match && partial.spec.preferTopDocMatch) return match;
 
     // Recursively search all same-origin iframes
     const iframes = Array.from(doc.querySelectorAll('iframe'));
@@ -173,7 +173,7 @@ export async function swapPartials(partialWrapper: HTMLElement, targetPartial: P
     // createAndLoadIframe resolves.
     let inFlightIframe: HTMLIFrameElement | null = null;
 
-    const isCancelled = registerInFlight(targetPartial.selector, () => {
+    const isCancelled = registerInFlight(targetPartial.spec.selector, () => {
         rollback(inFlightIframe);
         inFlightIframe = null;
     });
@@ -194,7 +194,7 @@ export async function swapPartials(partialWrapper: HTMLElement, targetPartial: P
     if (!iframe) {
         console.error(`${LOG} iframe failed to load - falling back.`);
         rollback();
-        clearInFlight(targetPartial.selector);
+        clearInFlight(targetPartial.spec.selector);
         window.top!.location.href = targetUrl;
         return;
     }
@@ -214,18 +214,18 @@ export async function swapPartials(partialWrapper: HTMLElement, targetPartial: P
     if (!partialDoc) {
         console.warn(`${LOG} iframe contentDocument unavailable - falling back.`);
         rollback(iframe);
-        clearInFlight(targetPartial.selector);
+        clearInFlight(targetPartial.spec.selector);
         window.top!.location.href = targetUrl;
         return;
     }
 
 
-    const innerElement = isolateIframe(partialDoc, targetPartial.selector);
+    const innerElement = isolateIframe(partialDoc, targetPartial.spec.selector);
     console.log('Isolated');
     if (!innerElement) {
-        console.warn(`${LOG} Selector "${targetPartial.selector}" not found in iframe - falling back.`);
+        console.warn(`${LOG} Selector "${targetPartial.spec.selector}" not found in iframe - falling back.`);
         rollback(iframe);
-        clearInFlight(targetPartial.selector);
+        clearInFlight(targetPartial.spec.selector);
         window.top!.location.href = targetUrl;
         return;
     }

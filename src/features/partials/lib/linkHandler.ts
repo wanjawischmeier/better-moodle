@@ -102,7 +102,7 @@ const buildClickHandler =
         updateNavActiveState(href);
         
         console.log(
-            `[better-moodle/partials] Applying partial "${partial.selector}":`,
+            `[better-moodle/partials] Applying partial "${partial.spec.selector}":`,
             fromUrl, '->', href,
         );
         void applyPartial(partial, href, false).catch(console.error);

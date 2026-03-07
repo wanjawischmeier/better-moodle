@@ -21,7 +21,7 @@
 - [x] Fix white loading screen on nested iframe
 - [ ] Propagate on bg clicks through all frames to fix nav bar collapse
 - [ ] Partial fragment css patching
-- [ ] Remove url pinning logic
+- [x] Remove url pinning logic
 - [ ] mark iframes with a class (to not accidentally remove iframes from smth else)
 - [ ] Fix: Hide spinner immediately to avoid glitch during fade out
 - [x] Split up handler
