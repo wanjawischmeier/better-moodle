@@ -20,6 +20,7 @@ export const createAndLoadIframe = async (
         'border:0;width:100%;display:block;overflow:hidden;' +
         `position:absolute;top:0;left:0;height:${height}px;z-index:0;`;
     iframe.src = targetUrl;
+    iframe.dataset.isPartialIframe = 'true';
     // Insert behind barrier (lower DOM order = lower z-index).
     wrapper.insertBefore(iframe, barrier);
 

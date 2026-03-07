@@ -138,13 +138,15 @@ export async function swapPartials(partialWrapper: HTMLElement, targetPartial: P
     //   new iframe      position:absolute  z-index:0
     //   old children    normal flow        (behind all positioned children)
 
-    // Snapshot and hide existing children so we can remove them once the swap is done.
-    // Don't remove immediately to keep possible scripts running.
+    // Snapshot and hide existing children
     const oldChildren = Array.from(partialWrapper.children) as HTMLElement[];
-    let oldChildrenRemovalTimeoutId: NodeJS.Timeout | null = null;
+    let oldIframeRemovalTimeoutId: NodeJS.Timeout | null = null;
     for (const child of oldChildren) {
         child.style.display = 'none';
     }
+
+    // Remember url for existing children
+    partialWrapper.dataset.partialUrl = partialWrapper.ownerDocument.location.href;
 
 
     // Preserve styles we temporarily override so they can be restored on rollback.
@@ -163,35 +165,34 @@ export async function swapPartials(partialWrapper: HTMLElement, targetPartial: P
         partialWrapper.style.position = prevPosition;
         partialWrapper.style.minHeight = prevMinHeight;
 
-        if (oldChildrenRemovalTimeoutId) {
-            clearTimeout(oldChildrenRemovalTimeoutId);
+        if (oldIframeRemovalTimeoutId) {
+            clearTimeout(oldIframeRemovalTimeoutId);
             console.log(`${LOG} Child removal canceled.`);
         }
     };
 
     // Declare iframe here so the cleanup closure can reference it before
     // createAndLoadIframe resolves.
-    let inFlightIframe: HTMLIFrameElement | null = null;
+    let partialIframe: HTMLIFrameElement | null = null;
 
     const isCancelled = registerInFlight(targetPartial.spec.selector, () => {
-        rollback(inFlightIframe);
-        inFlightIframe = null;
+        rollback(partialIframe);
+        partialIframe = null;
     });
 
     // Scroll the top-level page to the very top so the spinner is visible.
     window.top!.scrollTo({ top: 0, behavior: 'smooth' });
 
     console.log(`${LOG} Loading "${targetUrl}" in new iframe…`);
-    const iframe = await createAndLoadIframe(partialWrapper, barrier, targetUrl, currentHeight);
-    inFlightIframe = iframe;
+    partialIframe = await createAndLoadIframe(partialWrapper, barrier, targetUrl, currentHeight);
 
     if (isCancelled()) {
         console.log(`${LOG} Swap to "${targetUrl}" was superseded - aborting.`);
-        iframe?.remove();
+        partialIframe?.remove();
         return;
     }
 
-    if (!iframe) {
+    if (!partialIframe) {
         console.error(`${LOG} iframe failed to load - falling back.`);
         rollback();
         clearInFlight(targetPartial.spec.selector);
@@ -202,7 +203,7 @@ export async function swapPartials(partialWrapper: HTMLElement, targetPartial: P
 
 
     console.log(`${LOG} Waiting for iframe DOM to stabilise…`);
-    await waitForIframeStable(iframe);
+    await waitForIframeStable(partialIframe);
     console.log(`${LOG} iframe DOM stable, proceeding with isolation.`);
 
     if (isCancelled()) {
@@ -210,10 +211,10 @@ export async function swapPartials(partialWrapper: HTMLElement, targetPartial: P
         return;
     }
 
-    const partialDoc = iframe.contentDocument;
+    const partialDoc = partialIframe.contentDocument;
     if (!partialDoc) {
         console.warn(`${LOG} iframe contentDocument unavailable - falling back.`);
-        rollback(iframe);
+        rollback(partialIframe);
         clearInFlight(targetPartial.spec.selector);
         window.top!.location.href = targetUrl;
         return;
@@ -224,7 +225,7 @@ export async function swapPartials(partialWrapper: HTMLElement, targetPartial: P
     console.log('Isolated');
     if (!innerElement) {
         console.warn(`${LOG} Selector "${targetPartial.spec.selector}" not found in iframe - falling back.`);
-        rollback(iframe);
+        rollback(partialIframe);
         clearInFlight(targetPartial.spec.selector);
         window.top!.location.href = targetUrl;
         return;
@@ -238,18 +239,18 @@ export async function swapPartials(partialWrapper: HTMLElement, targetPartial: P
     // Fix (a): Only remove old children that are iframes (to free their resources);
     // non-iframe children are kept hidden so fix (b) can restore them if an inner
     // partial later tries to navigate back to this same URL.
-    iframe.style.position = 'static';
-    iframe.style.visibility = 'visible';
-    oldChildrenRemovalTimeoutId = setTimeout(() => {
+    partialIframe.style.position = 'static';
+    partialIframe.style.visibility = 'visible';
+    oldIframeRemovalTimeoutId = setTimeout(() => {
         console.log(`${LOG} Marking old iframes for removal`);
         console.log(oldChildren);
         console.log(partialWrapper.children);
         for (const child of oldChildren) {
             console.log(child)
-            console.log(child instanceof HTMLIFrameElement)
+            console.log(child.dataset)
             console.log(child.tagName)
-            if (child.tagName === 'IFRAME') { // instanceof doesnt work across iframes
-                console.log(`${LOG} Removing iframe ${(child as HTMLIFrameElement).src}`);
+            if (child.dataset.isPartialIframe === 'true') { // instanceof doesnt work across iframes
+                console.log(`${LOG} Removing partial iframe ${(child as HTMLIFrameElement).src}`);
                 child.remove();
             }
         }
@@ -260,5 +261,5 @@ export async function swapPartials(partialWrapper: HTMLElement, targetPartial: P
     fadeOutOverlay(barrier, spinnerWrapper);
     console.log('finalized');
 
-    return new PartialElement(partialDoc, iframe, innerElement);
+    return new PartialElement(partialDoc, partialIframe, innerElement);
 }
