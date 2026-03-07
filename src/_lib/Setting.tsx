@@ -150,6 +150,9 @@ export default abstract class Setting<
 
                 this.undo();
 
+                // Don't show sync popups inside iframes — the top document already shows them.
+                if (window !== window.top) return;
+
                 if (this.#requiresReload) {
                     void toast(
                         mdToHtml(
