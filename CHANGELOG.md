@@ -1,5 +1,97 @@
 # Changelog
 
+## [2.2.1](https://github.com/wanjawischmeier/better-moodle/compare/2.6.7...2.2.1) (2026-03-08)
+
+
+### Features
+
+* **courses:** close image zooming on pressing ESC ([bd82ee1](https://github.com/wanjawischmeier/better-moodle/commit/bd82ee1bb46aaa9d9214797680f749cc3b53c9a1))
+* **courses:** implpement transition for closing zoomed images ([5882d03](https://github.com/wanjawischmeier/better-moodle/commit/5882d034051030f9ea6bcb4bc33a756819fb630d))
+* **courses:** re-introduce sidebarCollapseAll ([ac98a6b](https://github.com/wanjawischmeier/better-moodle/commit/ac98a6b85a165d94e56352ec2ce491c878a599bb))
+* **dashboard:** add course actions to sidebar [#830](https://github.com/wanjawischmeier/better-moodle/issues/830) ([adff056](https://github.com/wanjawischmeier/better-moodle/commit/adff0566e42afcff3b11dfd8f37595646ae6872f))
+* **expandedPrideLogo:** Adds more customization options to the moodle logo ([#208](https://github.com/wanjawischmeier/better-moodle/issues/208)) ([bcd37f5](https://github.com/wanjawischmeier/better-moodle/commit/bcd37f52aed3402c5c7d59208c2695549f94c4b7))
+* implement short christmas countdown [#822](https://github.com/wanjawischmeier/better-moodle/issues/822) ([18569df](https://github.com/wanjawischmeier/better-moodle/commit/18569df4ad01fd6e63028077586f927ff30f2c2e))
+* **linkIcons:** add mattermost icon to wetalk.informatik.uni-kiel.de links (CAU-only) ([#872](https://github.com/wanjawischmeier/better-moodle/issues/872)) ([dfae698](https://github.com/wanjawischmeier/better-moodle/commit/dfae6982e3479d372f5a09d32901549f802d7f0f))
+* **linkIcons:** implement linkIcons for Webex (UzL-only) ([93ac707](https://github.com/wanjawischmeier/better-moodle/commit/93ac7078e87cb58d6524d6576350b8cc22274db9))
+* **messages.markdown:** Add markdown support to messages ([#380](https://github.com/wanjawischmeier/better-moodle/issues/380)) ([39b66c1](https://github.com/wanjawischmeier/better-moodle/commit/39b66c1277f97ce7c22244bf1e85f091518b80c0))
+* **ninaIntegration:** Add NINA warn app integration ([#376](https://github.com/wanjawischmeier/better-moodle/issues/376)) ([fa21640](https://github.com/wanjawischmeier/better-moodle/commit/fa21640686d18600c0e59de455b5241940123c7a))
+* **nina:** show start and end date in summary ([4503525](https://github.com/wanjawischmeier/better-moodle/commit/45035258e95a4a87edde4edadeab5436618c4010))
+* **nina:** show time of start and end [#803](https://github.com/wanjawischmeier/better-moodle/issues/803) ([d8a16ff](https://github.com/wanjawischmeier/better-moodle/commit/d8a16ffcd7e815e7e31f847ad0676af7ac95abb6))
+* **prideLogo:** Add setting to rotate the pride flag on the logo ([#271](https://github.com/wanjawischmeier/better-moodle/issues/271)) by @YorikHansen ([50eca0f](https://github.com/wanjawischmeier/better-moodle/commit/50eca0f0f0a04a3d054006c6229cd08a6dc4a385))
+* **quickRoleChange:** Make switching roles as easy as switching lang ([#215](https://github.com/wanjawischmeier/better-moodle/issues/215)) ([6aac352](https://github.com/wanjawischmeier/better-moodle/commit/6aac35237c4033964f159d5553ac15ad99aae01f))
+* **readme:** add Better-Moodle logo and link to moothel homepage https://moothel.pet ([6fe4eeb](https://github.com/wanjawischmeier/better-moodle/commit/6fe4eeba54dcc42ac3f82e4daf3c7dd6a18638af))
+* **settings:** add Better-Moodle logo in background ([0a36266](https://github.com/wanjawischmeier/better-moodle/commit/0a36266be5c079b864dd0e79d186d6cdfed85d7d))
+* **speiseplan:** implement filters [#859](https://github.com/wanjawischmeier/better-moodle/issues/859) ([#882](https://github.com/wanjawischmeier/better-moodle/issues/882)) ([b16ad90](https://github.com/wanjawischmeier/better-moodle/commit/b16ad90ab06126d8c53aa6f15a268f09b8e45d2b))
+* **style:** improve creating style elements at diverse points ([c4f697b](https://github.com/wanjawischmeier/better-moodle/commit/c4f697bc3bc45782e0ca99c45aaaa9aa4a3e1be9))
+* **weatherDisplay:** Add a weather display to moodle ([#194](https://github.com/wanjawischmeier/better-moodle/issues/194)) by @YorikHansen ([73bfaf9](https://github.com/wanjawischmeier/better-moodle/commit/73bfaf9b412d3daf063cd00af10eefc94cc37c24))
+
+
+### Bug Fixes
+
+* base branch is now main ([286c412](https://github.com/wanjawischmeier/better-moodle/commit/286c4128fbbcbb2db570f38c9829d0dafedd11ee))
+* **bookmarks:** improve cursor of disabled buttons ([d7d86ff](https://github.com/wanjawischmeier/better-moodle/commit/d7d86ff412e07a1c28e7bc607b23203cd71876eb))
+* **bookmarks:** improve position of add-button ([a3f746a](https://github.com/wanjawischmeier/better-moodle/commit/a3f746a15ceeb2e41c1fe24e4bf889e892c9dd3c))
+* **cauNavbar:** make buttons translateable by removing the weird icon hacks ([#871](https://github.com/wanjawischmeier/better-moodle/issues/871)) ([43cda83](https://github.com/wanjawischmeier/better-moodle/commit/43cda832c61a343b8bbe237cc072288cb18b0e4c))
+* **cau:** remove unused connect urls ([#802](https://github.com/wanjawischmeier/better-moodle/issues/802)) ([436cef8](https://github.com/wanjawischmeier/better-moodle/commit/436cef8c6c7f3b6aa5634228995f5168b4c31368))
+* **courses/images:** don't apply maxWidth on drag and drop question images ([#964](https://github.com/wanjawischmeier/better-moodle/issues/964)) ([c02e97f](https://github.com/wanjawischmeier/better-moodle/commit/c02e97f6aa02066a93439007a5b081c962fecd34)), closes [#963](https://github.com/wanjawischmeier/better-moodle/issues/963)
+* **courses/imageZoom:** fix image zoom not working on some pages (backported from v2) ([ff6a8cb](https://github.com/wanjawischmeier/better-moodle/commit/ff6a8cbf91fa6b779a8c37b66f472c0d13783d16))
+* **courses/imgMaxWidth:** fix image max width not working correctly on some pages (backported from v2) ([7e12288](https://github.com/wanjawischmeier/better-moodle/commit/7e12288c8ac8ab0312da04bbcc5c4676cb2d0a88))
+* **courses:** fix cardsPerRow being broke by moodle update ([1f5ef55](https://github.com/wanjawischmeier/better-moodle/commit/1f5ef555a30d2f20a7f034067b8bc2f12c8dae2b))
+* **courses:** fix image sizes being broke since moodle update ([24941a5](https://github.com/wanjawischmeier/better-moodle/commit/24941a5987e8e94d2d3d180eca3b1d1e4c49c7a3))
+* **courses:** fix zooming into svg images ([975e7fc](https://github.com/wanjawischmeier/better-moodle/commit/975e7fc4d15e3515873b701ceebf729ccdb833e3))
+* **courses:** fix zooming onto images with css width set ([fc6664d](https://github.com/wanjawischmeier/better-moodle/commit/fc6664d07d36aad3998572a3008404a31918f5be))
+* **darkmode:** Fix hidden activities being unreadable ([#319](https://github.com/wanjawischmeier/better-moodle/issues/319)) ([2e6777b](https://github.com/wanjawischmeier/better-moodle/commit/2e6777be0362b5c2ae9d8a40306558df4d99d79f))
+* **darkmode:** Fix some unreadable texts ([#419](https://github.com/wanjawischmeier/better-moodle/issues/419)) ([72e9370](https://github.com/wanjawischmeier/better-moodle/commit/72e9370c2396363943def71c4ab8a136e25ac59b))
+* **dashboard:** fix icon in course filter ([017caeb](https://github.com/wanjawischmeier/better-moodle/commit/017caeb0131c746889805e27593303d0abe147a7))
+* **images:** fix some full-width images from overflowing ([4b30282](https://github.com/wanjawischmeier/better-moodle/commit/4b30282cb1e9a3f03518f50e8c5542e441408007))
+* **images:** remove max-width and max-height from copied image style ([#942](https://github.com/wanjawischmeier/better-moodle/issues/942)) ([c9493b7](https://github.com/wanjawischmeier/better-moodle/commit/c9493b7bf9ca3469361c94253f4f1506901fc8a6))
+* **linkIcons:** do not show icon on de-facto empty links ([959e437](https://github.com/wanjawischmeier/better-moodle/commit/959e437e0cd9b12e2adf28c2d076ef6f92bfc35b))
+* **linkIcons:** fix padding for icons after the text ([9ec1cd5](https://github.com/wanjawischmeier/better-moodle/commit/9ec1cd546877ea136dbf2054147c653adeb78333))
+* **markdownMessages:** Allow HTML inputs in markdown mode ([#412](https://github.com/wanjawischmeier/better-moodle/issues/412)) ([e75f1d8](https://github.com/wanjawischmeier/better-moodle/commit/e75f1d8909934dc3abfac70949dccf5c1fd1a6b7))
+* **markdownMessages:** Fix sometimes crashing when using Moodle as guest ([#413](https://github.com/wanjawischmeier/better-moodle/issues/413)) ([19c2677](https://github.com/wanjawischmeier/better-moodle/commit/19c267750e2e1ca8bffe502d756bea01507657a5))
+* **marquee:** fix events sometimes not clickable [#884](https://github.com/wanjawischmeier/better-moodle/issues/884) ([2477407](https://github.com/wanjawischmeier/better-moodle/commit/2477407b452db3698aeeea8bf8b05b146c3babc7))
+* **modals:** fix some modals taking long to load ([f218809](https://github.com/wanjawischmeier/better-moodle/commit/f2188098b92d05f3eb45c6091863579b9cf211b7))
+* **modals:** fix visual glitches in some Better-Moodle modals ([c493e3a](https://github.com/wanjawischmeier/better-moodle/commit/c493e3ac93316c86c3372f2a52e6af71965dd78a))
+* **myCourses:** allow opening "my courses" page in a new tab via middle-click ([6a653df](https://github.com/wanjawischmeier/better-moodle/commit/6a653dfaef716f3b7d5e59f1a2c75a180aa1dcb5))
+* **ninaIntegration:** Fix  mega alarm triggering for cancelations ([#384](https://github.com/wanjawischmeier/better-moodle/issues/384)) ([c4bcbca](https://github.com/wanjawischmeier/better-moodle/commit/c4bcbca8b51dc17fc124d2513536c833205e8458))
+* **ninaIntegration:** Fix canceled events not showing as canceled on details page ([#414](https://github.com/wanjawischmeier/better-moodle/issues/414)) ([8e24e30](https://github.com/wanjawischmeier/better-moodle/commit/8e24e3009521765aa277b24e30fd12ef543bbb20))
+* **ninaIntegration:** fix updates marking warning as new ([3fe4a2c](https://github.com/wanjawischmeier/better-moodle/commit/3fe4a2c9ad430f5ab33f09141a5a41ef3ccfd635))
+* **nina:** mark seen alerts as seen without reopening summary modal ([dbc5cb2](https://github.com/wanjawischmeier/better-moodle/commit/dbc5cb273ca4d0387e160ab59c9ec8077d8342d7))
+* **nina:** show location in alert summary ([d2faa64](https://github.com/wanjawischmeier/better-moodle/commit/d2faa64c6cd2bfa58d3ad5b0c0ed756b5cef4862))
+* **noDownload:** Remove `forcedownload` param on page load ([#249](https://github.com/wanjawischmeier/better-moodle/issues/249)) ([a34c1e2](https://github.com/wanjawischmeier/better-moodle/commit/a34c1e212a1cc61a976f7b1f01e4177696fca5ee))
+* **prideLogo:** Fix 'pridification' on logos that are not transparent ([#237](https://github.com/wanjawischmeier/better-moodle/issues/237)) ([c4154ae](https://github.com/wanjawischmeier/better-moodle/commit/c4154ae945b0b1d9270ec5504838b1594c649679))
+* **prideLogo:** Fix Agender flag not working ([#297](https://github.com/wanjawischmeier/better-moodle/issues/297)) ([fedf65e](https://github.com/wanjawischmeier/better-moodle/commit/fedf65ed82972ea0e2237d9ac825f0ac8d6b082c))
+* **settings:** fix search icon not always working ([1cf9ad4](https://github.com/wanjawischmeier/better-moodle/commit/1cf9ad46fa0f91bb893c78043c1f1b7a6a6f954a))
+* **settings:** fix settings buttons not being clickable partially ([04f537a](https://github.com/wanjawischmeier/better-moodle/commit/04f537a4533909870d57b9cd3f7c1573c28fb11a))
+* **settings:** fix syncing some settings such as darkmode ([c42df5d](https://github.com/wanjawischmeier/better-moodle/commit/c42df5d23858de5a1ac957e4ee3d2ee56a6882d3))
+* **settings:** make latest version be aligned to end ([089d910](https://github.com/wanjawischmeier/better-moodle/commit/089d910ccc80d7ce65165361188e420a3f71ada5))
+* **sidebar:** Fix usertour modal being hidden ([#274](https://github.com/wanjawischmeier/better-moodle/issues/274)) by @YorikHansen ([7514e4c](https://github.com/wanjawischmeier/better-moodle/commit/7514e4c9e1ad37d7991dc7858e0786e068f7dfa5))
+* **sidebar:** Fix usertour z-index for courses ([#320](https://github.com/wanjawischmeier/better-moodle/issues/320)) ([49c72f8](https://github.com/wanjawischmeier/better-moodle/commit/49c72f808a33b850ebbc32712009a9ff73ade4a4))
+* **speiseplan:** add a darkmode fix for the 'your-favourites' logo ([#817](https://github.com/wanjawischmeier/better-moodle/issues/817)) ([3ef7aeb](https://github.com/wanjawischmeier/better-moodle/commit/3ef7aeb643ddcf7271fa108aa40adf93bfac9a0a))
+* **speiseplan:** disable speiseplan settings if speiseplan is disabled ([87ad4c1](https://github.com/wanjawischmeier/better-moodle/commit/87ad4c18216462980f30400c731ec101e61fa857))
+* **speiseplan:** fix co2-score ([542909c](https://github.com/wanjawischmeier/better-moodle/commit/542909cc608b4611fb0be57f9e7b26a8180c68ac))
+* **speiseplan:** fix english canteen menu not working ([#818](https://github.com/wanjawischmeier/better-moodle/issues/818)) ([32c675f](https://github.com/wanjawischmeier/better-moodle/commit/32c675f8c5fbd19212fa505924d601b7946efc0c))
+* **speiseplan:** fix title of "contains alcohole" icon being irritating and wrong ([#480](https://github.com/wanjawischmeier/better-moodle/issues/480)) ([9c09cf6](https://github.com/wanjawischmeier/better-moodle/commit/9c09cf671b72d80b62fe0478885ce7378f184ecc))
+* **speiseplan:** next day sometimes beeing hidden when there is no menu for the current day ([#845](https://github.com/wanjawischmeier/better-moodle/issues/845)) ([0446cf8](https://github.com/wanjawischmeier/better-moodle/commit/0446cf802bae5562a5891a8b53ce4cfc0d72a95d)), closes [#821](https://github.com/wanjawischmeier/better-moodle/issues/821)
+* **speiseplan:** show alternative info if speiseplan is empty ([16b1c0e](https://github.com/wanjawischmeier/better-moodle/commit/16b1c0e64044c0c334b6a51415e671a4ef951f3c))
+* **uzl:** fix evaluationsende should be 31.03 ([80a1726](https://github.com/wanjawischmeier/better-moodle/commit/80a1726ed31404f449aafc6f750fc67fc7365cb2))
+
+
+### Performance Improvements
+
+* Run userscript at document-start to improve startup time ([#968](https://github.com/wanjawischmeier/better-moodle/issues/968)) ([4a6c2f1](https://github.com/wanjawischmeier/better-moodle/commit/4a6c2f15d971b3637106b3620aabfec088a70091))
+
+
+### Miscellaneous Chores
+
+* **cau:** update to Moodle 4.5 ([#840](https://github.com/wanjawischmeier/better-moodle/issues/840)) ([20b6615](https://github.com/wanjawischmeier/better-moodle/commit/20b6615ba9112ea60f7bbaa3bf88e027e798cbe6))
+* release 2.0.0 ([dfdda02](https://github.com/wanjawischmeier/better-moodle/commit/dfdda02ac4367c4a745caef6ee1a38c25618892a))
+
+
+### Code Refactoring
+
+* **prideLogo:** Use linear-gradients instead of svgs [#212](https://github.com/wanjawischmeier/better-moodle/issues/212) ([#217](https://github.com/wanjawischmeier/better-moodle/issues/217)) ([c35eadf](https://github.com/wanjawischmeier/better-moodle/commit/c35eadf4fa221b285985e9505df083a877befeb1))
+
 ## [2.6.7](https://github.com/jxn-30/better-moodle/compare/2.6.6...2.6.7) (2026-02-11)
 
 
