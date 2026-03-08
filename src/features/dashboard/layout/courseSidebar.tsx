@@ -54,7 +54,7 @@ let drawer: Drawer;
 const getCourseBlocks = (): Promise<HTMLDivElement[]> =>
     Promise.all([
         courseFilter === '_sync' ?
-            getAvailableCourseFilters().then(getActiveFilter)
+            getActiveFilter()
         :   Promise.resolve(courseFilter),
         require(['block_myoverview/repository'] as const),
     ])
